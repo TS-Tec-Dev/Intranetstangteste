@@ -1,9 +1,0 @@
-﻿Usuario,Senha,Validade,Permissoes,Admin
-thiagosc,pbkdf2_sha256$380000$bcc8b9c5db361d3a296611b891929a99$58db2354603e9ffe5fc36ff14753acdaf49ae98bbd1acb2ce58a757f0e37fe16,Vitalício,"📝 Nova O.S.,📋 Gerenciar O.S.,🖨️ Imprimir O.S.,📅 Formulários e Prazos (FMs),🛒 Solicitações de Compras,📊 Dashboard",Sim
-operacao,pbkdf2_sha256$380000$c7ac52f147dd1099983a58fd626892f1$e71b2cbc9569d97a0efa8c541441c776ed64df4d701136d75075c8c3fe0f6785,2026-09-30,"📝 Nova O.S.,🛒 Solicitações de Compras",Não
-manutencao,pbkdf2_sha256$380000$6a4674e4a2a64b592ad17544f92b75cb$19fe70e94d1baa82818f683e21400869c9126a991ee7d35c3e354a190cd185c5,2026-09-30,"📝 Nova O.S.,📋 Gerenciar O.S.,🖨️ Imprimir O.S.,📅 Formulários e Prazos (FMs),🛒 Solicitações de Compras",Não
-milton,pbkdf2_sha256$380000$2a4e252b4e4cbd4866404e58a37f487b$2288eed0caffa45eb212a31324c068a3b7b1a6c692bb4d20ea41c9af5468badd,2026-09-30,"📝 Nova O.S.,📋 Gerenciar O.S.,🖨️ Imprimir O.S.,📅 Formulários e Prazos (FMs),🛒 Solicitações de Compras,📊 Dashboard",Sim
-Volmar,pbkdf2_sha256$380000$12ffcdd18945ad85289735e47d5be3fe$f9c11deadcee315468a07652535906c451abb143b2179bfdc99d8e036464c558,2026-09-29,"📝 Nova O.S.,🛒 Solicitações de Compras,🖨️ Imprimir O.S.",Não
-kkethilyn,pbkdf2_sha256$380000$4dc6dc962ea9871aa8fafd93d2a45d4f$fb4b6064537e95ca885b71057ee6c5995f9e02b013f99e7f22730b661d35e090,2026-09-30,"📝 Nova O.S.,📋 Gerenciar O.S.,🖨️ Imprimir O.S.,📅 Formulários e Prazos (FMs),🛒 Solicitações de Compras,📊 Dashboard",Sim
-portaria,pbkdf2_sha256$380000$882415249801e3a6452ee7dbcc661ca0$12d531024fc7570e232a4508cd1826bb0ebbfd46567a1478390110a78ad26833,2026-09-30,"📝 Nova O.S.,🖨️ Imprimir O.S.,🛒 Solicitações de Compras",Não
-jorge,pbkdf2_sha256$380000$14da94810fbdc1b00b8ab574f0c1519b$1c74f6676e45636639d427a1dec590a81663a1d96bb585db724457cdb7bfc570,2026-09-30,"📝 Nova O.S.,🛒 Solicitações de Compras,📊 Dashboard",Sim
