@@ -1,0 +1,9 @@
+Usuario,Senha,Validade,Permissoes,Admin
+thiagosc,stang2026,Vitalício,"📝 Nova O.S.,📋 Gerenciar O.S.,🖨️ Imprimir O.S.,📅 Formulários e Prazos (FMs),🛒 Solicitações de Compras,📊 Dashboard",Sim
+operacao,operacao,2026-09-30,"📝 Nova O.S.,🛒 Solicitações de Compras",Não
+manutencao,manutencao,2026-09-30,"📝 Nova O.S.,📋 Gerenciar O.S.,🖨️ Imprimir O.S.,📅 Formulários e Prazos (FMs),🛒 Solicitações de Compras",Não
+milton,767804,2026-09-30,"📝 Nova O.S.,📋 Gerenciar O.S.,🖨️ Imprimir O.S.,📅 Formulários e Prazos (FMs),🛒 Solicitações de Compras,📊 Dashboard",Sim
+Volmar,258787,2026-09-29,"📝 Nova O.S.,🛒 Solicitações de Compras,🖨️ Imprimir O.S.",Não
+kkethilyn,estoque,2026-09-30,"📝 Nova O.S.,📋 Gerenciar O.S.,🖨️ Imprimir O.S.,📅 Formulários e Prazos (FMs),🛒 Solicitações de Compras,📊 Dashboard",Sim
+portaria,portaria,2026-09-30,"📝 Nova O.S.,🖨️ Imprimir O.S.,🛒 Solicitações de Compras",Não
+jorge,recepcao,2026-09-30,"📝 Nova O.S.,🛒 Solicitações de Compras,📊 Dashboard",Sim
