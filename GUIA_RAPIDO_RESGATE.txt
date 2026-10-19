@@ -1,0 +1,18 @@
+INTRANET STANG V2.0.1 - GUIA RAPIDO
+
+ATENCAO: nao publique ZIP de resgate, PDFs ou CSVs no GitHub publico.
+
+1. Antes do deploy, guarde o backup consolidado e os arquivos da Intranet antiga.
+2. Crie/configure DATABASE_URL do Supabase no Secrets do Streamlit.
+3. Defina BOOTSTRAP_ADMIN_PASSWORD forte se o banco estiver sem usuarios.
+4. Instale apenas o codigo do ZIP de implantacao no repositorio GitHub.
+5. Acesse a Intranet como administrador > filial MANDALLA.
+6. Abra Filiais e Backup > Importar resgate 2026.
+7. Envie o ZIP consolidado em particular, gere e baixe copia do banco anterior.
+8. Confira pre-visualizacao e confirme a importacao.
+9. Valide O.S., compras, anexos, FMs e imprima um novo backup.
+
+Os anexos 538 e 539 estao guardados, mas as linhas cadastrais precisam
+de uma exportacao posterior. Nao use o modo SQLite efemero na producao.
+
+Esta entrega NAO atualiza seu GitHub ou app Streamlit automaticamente.

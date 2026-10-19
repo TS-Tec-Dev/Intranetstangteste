@@ -1,8 +1,9 @@
-streamlit
-pandas
-plotly
-Pillow
-streamlit
-PyMuPDF
-pypdf
-reportlab
+streamlit>=1.42,<2
+pandas>=2.0,<3
+plotly>=5.0,<7
+Pillow>=10
+PyMuPDF>=1.24
+pypdf>=4
+reportlab>=4
+SQLAlchemy>=2.0,<3
+psycopg2-binary>=2.9,<3
