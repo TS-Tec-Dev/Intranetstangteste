@@ -15,7 +15,7 @@ def renderizar(filial):
         st.success('✅ Banco externo configurado. Atualizações de código não sobrescrevem os registros remotos.')
     else:
         st.warning('⚠️ MODO LOCAL: configure DATABASE_URL no Streamlit Cloud. SQLite local NÃO sobrevive a reinicializações do servidor.')
-    tab_f,tab_b,tab_u,tab_p,tab_i,tab_h,tab_v=st.tabs(['🏢 Filiais','💾 Backup ZIP','🔐 Contas e credenciais','📩 Importar perfis','📤 Importar resgate 2026','🕒 Versões anteriores','🚀 Atualizações'])
+    tab_f,tab_b,tab_u,tab_p,tab_m,tab_i,tab_h,tab_v=st.tabs(['🏢 Filiais','💾 Backup ZIP','🔐 Contas e credenciais','📩 Importar perfis','👥 Migrar usuários','📤 Importar resgate 2026','🕒 Versões anteriores','🚀 Atualizações'])
     with tab_f:
         lista=repo.listar_filiais()
         st.dataframe(pd.DataFrame(lista).rename(columns={'codigo':'Código','nome':'Nome da filial','ativo':'Ativo'}),
@@ -147,6 +147,10 @@ def renderizar(filial):
                             st.error('Importação não realizada: '+str(ex))
             except (ValueError,RuntimeError,OSError) as ex:
                 st.error('Não foi possível abrir o complemento: '+str(ex))
+
+    with tab_m:
+        import migrar_usuarios_anterior
+        migrar_usuarios_anterior.renderizar()
 
     with tab_i:
         import mod_resgate_2026 as resgate
