@@ -7,3 +7,5 @@ pypdf>=4
 reportlab>=4
 SQLAlchemy>=2.0,<3
 psycopg2-binary>=2.9,<3
+
+cryptography>=42,<47

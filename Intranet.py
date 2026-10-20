@@ -1222,9 +1222,10 @@ with st.sidebar:
         st.session_state.autenticado = False
         st.session_state.usuario = ""
         st.session_state.pop("filial_ativa", None)
+        st.session_state.pop("backup_contas_encrypted", None)
         st.rerun()
     st.info(f"🏢 {nomes_filiais[st.session_state.filial_ativa]}\nStatus: Conectado 🟢")
-    st.caption("Versão 2.0.1")
+    st.caption("Versão 2.0.2")
     
     st.markdown("<div style='text-align: left; font-style: italic; font-size: 11px; opacity: 0.7; margin-top: 25px;'><i>By: TS tech</i></div>", unsafe_allow_html=True)
 

@@ -358,6 +358,8 @@ def remover_documento(caminho):
 
 
 def backup_filial(filial, incluir_usuarios=False):
+    if incluir_usuarios:
+        raise ValueError('Os usuários só podem ser exportados pelo backup criptografado de contas.')
     scope_list = [filial] + ([GLOBAL] if incluir_usuarios else [])
     with engine().connect() as conn:
         regs = conn.execute(select(bancos_tb).where(bancos_tb.c.filial.in_(scope_list))).mappings().all()

@@ -5,7 +5,7 @@ import streamlit as st
 from sqlalchemy.exc import IntegrityError
 import infra_persistencia as repo
 
-VERSAO = '2.0.1'
+VERSAO = '2.0.2'
 
 
 def renderizar(filial):
@@ -15,7 +15,7 @@ def renderizar(filial):
         st.success('✅ Banco externo configurado. Atualizações de código não sobrescrevem os registros remotos.')
     else:
         st.warning('⚠️ MODO LOCAL: configure DATABASE_URL no Streamlit Cloud. SQLite local NÃO sobrevive a reinicializações do servidor.')
-    tab_f,tab_b,tab_i,tab_h,tab_v=st.tabs(['🏢 Filiais','💾 Backup ZIP','📤 Importar resgate 2026','🕒 Versões anteriores','🚀 Atualizações'])
+    tab_f,tab_b,tab_u,tab_i,tab_h,tab_v=st.tabs(['🏢 Filiais','💾 Backup ZIP','🔐 Contas e credenciais','📤 Importar resgate 2026','🕒 Versões anteriores','🚀 Atualizações'])
     with tab_f:
         lista=repo.listar_filiais()
         st.dataframe(pd.DataFrame(lista).rename(columns={'codigo':'Código','nome':'Nome da filial','ativo':'Ativo'}),
@@ -33,8 +33,8 @@ def renderizar(filial):
         st.info('Administradores podem alternar entre todas as filiais. Usuários comuns só têm acesso às filiais cadastradas em seu perfil.')
     with tab_b:
         st.markdown('#### Exportação de backup completo')
-        st.write('O arquivo ZIP contém os CSVs e anexos da filial selecionada. O banco de usuários é global e opcional.')
-        incluir=st.checkbox('Incluir usuários e assinaturas globais (dados sensíveis)',value=False)
+        st.write('O arquivo ZIP contém os CSVs, anexos e ferramentaria da filial. Contas de acesso e assinaturas são exportadas separadamente, criptografadas, na aba 🔐 Contas e credenciais.')
+        incluir=False
         if st.button('Preparar backup para download',key='gerar_zip'):
             try:
                 st.session_state['backup_zip'] = repo.backup_filial(filial,incluir)
@@ -47,7 +47,8 @@ def renderizar(filial):
         st.divider()
         st.markdown('#### Restauração controlada')
         arquivo=st.file_uploader('Selecionar ZIP gerado pela Intranet',type=['zip'],key='zip_restore')
-        restaurar_users=st.checkbox('Restaurar também banco global de usuários (se presente no backup)',value=False)
+        restaurar_users=False
+        st.caption('Para recuperar usuários, senhas, e-mails, permissões e assinaturas, utilize a aba 🔐 Contas e credenciais.')
         confirmar=st.checkbox(f'Estou ciente de que a restauração substituirá os dados ATUAIS da filial {filial}',value=False)
         if st.button('♻️ Restaurar backup',disabled=not(arquivo and confirmar),type='primary'):
             try:
@@ -57,6 +58,60 @@ def renderizar(filial):
                 st.rerun()
             except Exception as ex:st.error(f'Restauração não realizada: {ex}')
         st.caption('Snapshots automáticos das últimas 20 alterações de cada CSV ficam no banco externo. Guarde também backups ZIP em local seguro fora do servidor.')
+    with tab_u:
+        import backup_contas
+        st.markdown('### 🔐 Backup completo de usuários e acessos')
+        st.info('Inclui TODOS os usuários de TODAS as filiais: login, hash da senha atual, validade, perfil Admin, permissões, filiais autorizadas, e-mail, senha/token SMTP, servidor e porta SMTP, além das imagens PNG de assinatura. Nenhuma senha de login aparece em texto puro. O arquivo é criptografado.')
+        st.caption('Usuários e seus documentos permanecem no PostgreSQL nas atualizações normais do GitHub. Este backup é uma proteção adicional para migrações, troca de banco ou desastres.')
+        with st.form('form_export_contas'):
+            senha_admin_exp = st.text_input('Sua senha de administrador (autorizar exportação)',type='password',key='confirma_admin_export')
+            senha_zip_exp = st.text_input('Crie uma senha exclusiva para proteger o backup (mínimo 14 caracteres)',type='password',key='chave_export')
+            senha_zip_exp2 = st.text_input('Repita a senha de proteção',type='password',key='chave_export2')
+            gerar_contas = st.form_submit_button('🔒 Gerar backup de contas criptografado')
+            if gerar_contas:
+                if senha_zip_exp != senha_zip_exp2:
+                    st.error('As senhas de proteção não conferem.')
+                else:
+                    try:
+                        st.session_state['backup_contas_encrypted'] = backup_contas.criar_backup_contas(
+                            senha_zip_exp,administrador=st.session_state.usuario,senha_admin=senha_admin_exp)
+                        st.success('Backup criptografado gerado. Baixe e guarde a senha em local SEPARADO.')
+                    except (ValueError, RuntimeError, OSError) as ex:
+                        st.error(str(ex))
+        if st.session_state.get('backup_contas_encrypted'):
+            st.download_button('📥 Baixar backup de TODOS os usuários (.stangbak)',
+                st.session_state['backup_contas_encrypted'],
+                file_name=f'CONTAS_IntranetStang_{datetime.now():%Y%m%d_%H%M}.stangbak',
+                mime='application/octet-stream')
+        st.warning('Guarde o arquivo e a senha em cofres separados. Se perder a senha de proteção, o arquivo NÃO poderá ser recuperado. NÃO envie o backup ao GitHub, WhatsApp público ou serviços sem controle de acesso.')
+        st.divider()
+        st.markdown('### ♻️ Restaurar usuários e configurações')
+        st.caption('A restauração mescla contas pelo nome de login: adiciona as que faltam e atualiza senhas (hash), permissões e SMTP das existentes. Não remove usuários extras nem altera compras ou O.S. Pode restaurar filiais ausentes. Se a senha do seu usuário for alterada pela restauração, faça login com a senha salva no backup.')
+        up_contas = st.file_uploader('Selecione o arquivo de contas .stangbak',type=['stangbak'],key='import_contas_encrypted')
+        senha_zip_imp = st.text_input('Senha que protege o backup .stangbak',type='password',key='chave_import')
+        if up_contas is not None and senha_zip_imp:
+            try:
+                resumo = backup_contas.visualizar_backup_contas(up_contas.getvalue(),senha_zip_imp)
+                c1,c2,c3,c4=st.columns(4)
+                c1.metric('Usuários',resumo['usuarios'])
+                c2.metric('Administradores',resumo['administradores'])
+                c3.metric('Filiais',resumo['filiais'])
+                c4.metric('Assinaturas PNG',resumo['assinaturas'])
+                st.write('Contas no arquivo: ', ', '.join(resumo['nomes']))
+                confirma_contas = st.checkbox('Confirmo que desejo atualizar os usuários existentes com os dados deste arquivo.',key='confirma_rest_contas')
+                senha_admin_imp = st.text_input('Sua senha atual de administrador (autorizar restauração)',type='password',key='admin_confirma_import')
+                if st.button('🔐 Restaurar contas do backup',disabled=not confirma_contas,type='primary'):
+                    try:
+                        r=backup_contas.restaurar_backup_contas(up_contas.getvalue(),senha_zip_imp,
+                            administrador=st.session_state.usuario,senha_admin=senha_admin_imp)
+                        st.session_state.pop('backup_contas_encrypted',None)
+                        st.success(f"Contas recuperadas: {r['adicionados']} novas, {r['atualizados']} atualizadas; "
+                                   f"{r['assinaturas']} assinaturas e {r['filiais']} filiais conferidas.")
+                        st.warning('Faça logout e entre novamente. As senhas de login podem ter sido restauradas para os valores anteriores.')
+                    except (ValueError, RuntimeError, OSError) as ex:
+                        st.error(str(ex))
+            except (ValueError, OSError, RuntimeError) as ex:
+                st.error('Não foi possível validar o backup: '+str(ex))
     with tab_i:
         import mod_resgate_2026 as resgate
         st.markdown('#### Importar registros recuperados da Intranet antiga')
@@ -107,7 +162,7 @@ def renderizar(filial):
     with tab_v:
         st.markdown('**Como atualizar sem perder os dados**')
         st.write('1. Configure DATABASE_URL uma única vez em Streamlit → Settings → Secrets.\n\n'
-                 '2. Faça um backup ZIP e guarde fora do servidor.\n\n'
+                 '2. Faça um backup ZIP da filial e um backup criptografado das contas. Guarde os dois fora do servidor.\n\n'
                  '3. Atualize o código no GitHub. O Streamlit implantará a versão nova; registros permanecem no banco externo.\n\n'
                  '4. Reabra a aplicação e confira os registros e anexos.\n\n'
                  '5. Não sobrescreva o banco com arquivos CSV do GitHub. Os CSVs do ZIP original são usados apenas para migração inicial.')
