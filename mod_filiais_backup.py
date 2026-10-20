@@ -112,6 +112,32 @@ def renderizar(filial):
                         st.error(str(ex))
             except (ValueError, OSError, RuntimeError) as ex:
                 st.error('Não foi possível validar o backup: '+str(ex))
+        st.divider()
+        st.markdown('### 📩 Importar complemento de perfis e assinatura')
+        st.caption('Importa apenas os e-mails de kkethilyn e Bruno Jerri e a assinatura PNG de milton. NÃO altera senhas de login, validade, permissões, administrador ou filiais. Os tokens SMTP são opcionais e digitados diretamente nesta tela.')
+        import importar_perfis_parciais as perfil_parcial
+        patch = st.file_uploader('Complemento criptografado .stangperfil',type=['stangperfil'],key='patch_perfis_v202')
+        senha_patch = st.text_input('Senha de abertura do complemento',type='password',key='pwd_patch_perfis')
+        if patch is not None and senha_patch:
+            try:
+                previa = perfil_parcial.visualizar(patch.getvalue(),senha_patch)
+                st.dataframe(pd.DataFrame(previa['emails']),hide_index=True,use_container_width=True)
+                st.info('Assinatura PNG vinculada a: milton')
+                with st.form('form_aplicar_perfis_v202'):
+                    token_k = st.text_input('Token SMTP novo de kkethilyn (opcional; vazio mantém o atual)',type='password')
+                    token_b = st.text_input('Token SMTP novo de Bruno Jerri (opcional; vazio mantém o atual)',type='password')
+                    atual_admin = st.text_input('Senha atual do administrador (obrigatória)',type='password')
+                    ok_patch = st.checkbox('Confirmei que os três usuários existem no cadastro e desejo atualizar somente estes dados.')
+                    submit_patch = st.form_submit_button('Aplicar complemento aos perfis',disabled=not ok_patch)
+                    if submit_patch:
+                        try:
+                            resultado=perfil_parcial.aplicar(patch.getvalue(),senha_patch,administrador=st.session_state.usuario,
+                                senha_admin=atual_admin,token_kkethilyn=token_k,token_bruno=token_b)
+                            st.success('Complemento aplicado: dois e-mails e uma assinatura vinculados. Senhas de login, permissões e filiais preservadas. Gere agora o backup de contas completo nesta mesma aba.')
+                        except (ValueError,RuntimeError,OSError) as ex:
+                            st.error('Importação não realizada: '+str(ex))
+            except (ValueError,RuntimeError,OSError) as ex:
+                st.error('Não foi possível abrir o complemento: '+str(ex))
     with tab_i:
         import mod_resgate_2026 as resgate
         st.markdown('#### Importar registros recuperados da Intranet antiga')
