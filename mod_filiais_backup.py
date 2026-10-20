@@ -130,8 +130,15 @@ def renderizar(filial):
                     token_b = st.text_input('Token SMTP novo de Bruno Jerri (opcional; vazio mantém o atual)',type='password')
                     atual_admin = st.text_input('Senha atual do administrador (obrigatória)',type='password')
                     ok_patch = st.checkbox('Confirmei que os três usuários existem no cadastro e desejo atualizar somente estes dados.')
-                    submit_patch = st.form_submit_button('Aplicar complemento aos perfis',disabled=not ok_patch)
-                    if submit_patch:
+                    # Formularios Streamlit enviam o estado dos widgets apenas no submit.
+                    # Nunca desabilite o submit dependendo de checkbox dentro do formulario:
+                    # isso cria um bloqueio circular e impede o envio.
+                    submit_patch = st.form_submit_button('Aplicar complemento aos perfis', type='primary')
+                    if submit_patch and not ok_patch:
+                        st.error('Marque a confirmacao de que os tres usuarios existem antes de aplicar.')
+                    elif submit_patch and not atual_admin.strip():
+                        st.error('Informe a senha atual de administrador antes de aplicar.')
+                    elif submit_patch:
                         try:
                             resultado=perfil_parcial.aplicar(patch.getvalue(),senha_patch,administrador=st.session_state.usuario,
                                 senha_admin=atual_admin,token_kkethilyn=token_k,token_bruno=token_b)
