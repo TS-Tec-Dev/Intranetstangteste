@@ -15,7 +15,7 @@ def renderizar(filial):
         st.success('✅ Banco externo configurado. Atualizações de código não sobrescrevem os registros remotos.')
     else:
         st.warning('⚠️ MODO LOCAL: configure DATABASE_URL no Streamlit Cloud. SQLite local NÃO sobrevive a reinicializações do servidor.')
-    tab_f,tab_b,tab_u,tab_i,tab_h,tab_v=st.tabs(['🏢 Filiais','💾 Backup ZIP','🔐 Contas e credenciais','📤 Importar resgate 2026','🕒 Versões anteriores','🚀 Atualizações'])
+    tab_f,tab_b,tab_u,tab_p,tab_i,tab_h,tab_v=st.tabs(['🏢 Filiais','💾 Backup ZIP','🔐 Contas e credenciais','📩 Importar perfis','📤 Importar resgate 2026','🕒 Versões anteriores','🚀 Atualizações'])
     with tab_f:
         lista=repo.listar_filiais()
         st.dataframe(pd.DataFrame(lista).rename(columns={'codigo':'Código','nome':'Nome da filial','ativo':'Ativo'}),
@@ -112,7 +112,9 @@ def renderizar(filial):
                         st.error(str(ex))
             except (ValueError, OSError, RuntimeError) as ex:
                 st.error('Não foi possível validar o backup: '+str(ex))
-        st.divider()
+        st.info('Para importar os e-mails de kkethilyn e Bruno Jerri e a assinatura de milton, clique na aba 📩 Importar perfis, ao lado desta aba.')
+    with tab_p:
+        st.caption('Importação complementar segura: não altera senhas de login, permissões nem filiais.')
         st.markdown('### 📩 Importar complemento de perfis e assinatura')
         st.caption('Importa apenas os e-mails de kkethilyn e Bruno Jerri e a assinatura PNG de milton. NÃO altera senhas de login, validade, permissões, administrador ou filiais. Os tokens SMTP são opcionais e digitados diretamente nesta tela.')
         import importar_perfis_parciais as perfil_parcial
@@ -133,11 +135,12 @@ def renderizar(filial):
                         try:
                             resultado=perfil_parcial.aplicar(patch.getvalue(),senha_patch,administrador=st.session_state.usuario,
                                 senha_admin=atual_admin,token_kkethilyn=token_k,token_bruno=token_b)
-                            st.success('Complemento aplicado: dois e-mails e uma assinatura vinculados. Senhas de login, permissões e filiais preservadas. Gere agora o backup de contas completo nesta mesma aba.')
+                            st.success('Complemento aplicado: dois e-mails e uma assinatura vinculados. Senhas de login, permissões e filiais preservadas. Gere agora o backup de contas completo na aba 🔐 Contas e credenciais.')
                         except (ValueError,RuntimeError,OSError) as ex:
                             st.error('Importação não realizada: '+str(ex))
             except (ValueError,RuntimeError,OSError) as ex:
                 st.error('Não foi possível abrir o complemento: '+str(ex))
+
     with tab_i:
         import mod_resgate_2026 as resgate
         st.markdown('#### Importar registros recuperados da Intranet antiga')
