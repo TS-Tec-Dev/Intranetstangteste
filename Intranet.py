@@ -16,6 +16,7 @@ import io
 import html as htmlmod
 import infra_persistencia as repositorio
 from seguranca_senhas import gerar_hash, verificar_senha
+import tema_stang
 
 # Tenta importar bibliotecas para manipulação e carimbo de PDFs
 try:
@@ -41,19 +42,17 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-hide_streamlit_style = """
-    <style>
-    </style>
-    """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# Design visual isolado: tema de exibição não altera CSVs, senhas, banco nem sessões de login.
+tema_stang.inicializar_tema()
+tema_stang.aplicar_tema("capa.png")
 if not repositorio.modo_producao():
     st.warning("⚠️ Banco de desenvolvimento local ativo. No Streamlit Cloud, configure DATABASE_URL para não perder dados após atualizações.")
 
 # Lista completa de menus disponíveis no sistema
 TODOS_MENUS = [
-    "📝 Nova O.S.", 
-    "📋 Gerenciar O.S.", 
-    "🖨️ Imprimir O.S.", 
+    "📝 Nova O.S.",
+    "📋 Gerenciar O.S.",
+    "🖨️ Imprimir O.S.",
     "📅 Formulários e Prazos (FMs)",
     "🛒 Solicitações de Compras",
     "✍️ Painel de Assinaturas",
@@ -61,109 +60,6 @@ TODOS_MENUS = [
     "🧰 Ferramentaria",
     "🏢 Filiais e Backup"
 ]
-
-# --- ESTILIZAÇÃO CSS PROFISSIONAL & SUPORTE A TEMAS (CLARO/ESCURO) ---
-background_css = ""
-if os.path.exists("capa.png"):
-    with open("capa.png", "rb") as img_file:
-        encoded_string = base64.b64encode(img_file.read()).decode()
-    background_css = f"""
-    <style>
-        .stApp {{
-            background: linear-gradient(rgba(0, 30, 80, 0.85), rgba(0, 15, 40, 0.90)), 
-                        url("data:image/png;base64,{encoded_string}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }}
-        .stTextInput input, .stSelectbox select, .stTextArea textarea {{
-            background-color: rgba(255, 255, 255, 0.9) !important;
-            color: #000000 !important;
-            font-weight: 500;
-        }}
-        .stDataFrame {{
-            background-color: rgba(255, 255, 255, 0.95);
-            border-radius: 8px;
-            padding: 5px;
-        }}
-        div[data-testid="stMetricValue"] {{
-            color: #00ffcc !important;
-        }}
-        
-        /* CARDS COMPACTOS DE STATUS (ESTILO POWER BI / MODERN BADGES) */
-        .status-card-container {{
-            display: flex;
-            gap: 12px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }}
-        .status-card {{
-            flex: 1;
-            min-width: 140px;
-            background: rgba(255, 255, 255, 0.07);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 8px;
-            padding: 10px 14px;
-            backdrop-filter: blur(8px);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.2s ease, border-color 0.2s ease;
-        }}
-        .status-card:hover {{
-            border-color: rgba(0, 255, 204, 0.4);
-            transform: translateY(-2px);
-        }}
-        .status-card-title {{
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 4px;
-            font-weight: 600;
-        }}
-        .status-card-value {{
-            font-size: 14px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }}
-        .badge-success {{ color: #00ffaa; }}
-        .badge-danger {{ color: #ff4b4b; }}
-        .badge-warning {{ color: #ffb703; }}
-        
-        /* CORREÇÃO DO MENU LATERAL (RADIO BUTTONS) COM SUPORTE A TEMA */
-        [data-testid="stSidebar"] .stRadio div[role="radiogroup"] {{
-            gap: 8px;
-        }}
-        [data-testid="stSidebar"] .stRadio label {{
-            background-color: rgba(255, 255, 255, 0.08);
-            padding: 6px 10px;
-            border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            width: 100%;
-            display: flex;
-            align-items: center;
-        }}
-        [data-testid="stSidebar"] .stRadio label:hover {{
-            background-color: rgba(255, 255, 255, 0.2);
-        }}
-
-        /* REGRAS PARA IMPRESSÃO LIMPA */
-        @media print {{
-            body {{
-                background: #ffffff !important;
-                color: #000000 !important;
-            }}
-            .stApp {{
-                background: #ffffff !important;
-            }}
-            [data-testid="stSidebar"], header, footer, .stButton, .stSelectbox, .no-print {{
-                display: none !important;
-            }}
-        }}
-    </style>
-    """
-st.markdown(background_css, unsafe_allow_html=True)
 
 # Bancos de Dados locais CSV
 ARQUIVO_OS = "banco_os.csv"
@@ -1207,6 +1103,9 @@ with st.sidebar:
         st.session_state.pop("carrinho_compras", None)
         st.session_state.pop("backup_zip", None)
         st.rerun()
+    # Alternância de aparência por sessão, preservada no parâmetro ?tema= da URL.
+    tema_stang.controle_tema()
+    st.markdown("---")
     if menus_disponiveis:
         menu = st.radio("Navegação Principal", menus_disponiveis)
     else:
@@ -1935,7 +1834,7 @@ if menu is not None:
                 )
 
                 st.plotly_chart(
-                    fig_fm,
+                    tema_stang.estilizar_grafico(fig_fm),
                     use_container_width=True,
                     config={"displaylogo": False}
                 )
@@ -2664,7 +2563,7 @@ if menu is not None:
                     x=0
                 )
             )
-            return fig
+            return tema_stang.estilizar_grafico(fig)
 
         # JANELA 1 — O.S.
         aba_dash_os, aba_dash_comp = st.tabs([
