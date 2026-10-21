@@ -54,18 +54,47 @@ def _imagem_base64(caminho: str) -> str:
     return base64.b64encode(arquivo.read_bytes()).decode("ascii")
 
 
+def _tema_valido(valor: object) -> bool:
+    """O Streamlit pode retornar None quando um segmento é desmarcado."""
+    return isinstance(valor, str) and valor in PALETAS
+
+
+def _tema_da_url() -> str:
+    try:
+        solicitado = st.query_params.get("tema", "escuro")
+        if isinstance(solicitado, (list, tuple)):
+            solicitado = solicitado[0] if solicitado else "escuro"
+    except Exception:
+        solicitado = "escuro"
+    return "Claro" if isinstance(solicitado, str) and solicitado.strip().casefold() == "claro" else "Escuro"
+
+
 def inicializar_tema() -> None:
-    if "tema_stang" not in st.session_state:
-        try:
-            solicitado = st.query_params.get("tema", "escuro")
-        except Exception:
-            solicitado = "escuro"
-        st.session_state["tema_stang"] = "Claro" if str(solicitado).lower() == "claro" else "Escuro"
+    """Sempre normaliza o tema antes de qualquer leitura de PALETAS.
+
+    O st.segmented_control permite desmarcar a opção atual (valor None).
+    Nesse caso, restaura a última opção válida, sem mudar de tema.
+    """
+    atual = st.session_state.get("tema_stang")
+    if _tema_valido(atual):
+        st.session_state["_stang_ultimo_tema_valido"] = atual
+        return
+
+    ultimo = st.session_state.get("_stang_ultimo_tema_valido")
+    recuperado = ultimo if _tema_valido(ultimo) else _tema_da_url()
+    st.session_state["tema_stang"] = recuperado
+    st.session_state["_stang_ultimo_tema_valido"] = recuperado
 
 
 def _atualizar_url_tema() -> None:
-    # Apenas a preferência visual, nunca credenciais, é colocada na URL.
-    st.query_params["tema"] = "claro" if st.session_state["tema_stang"] == "Claro" else "escuro"
+    # Callback executado ANTES do próximo render do Streamlit.
+    # Corrigir também a desmarcação do widget antes da atualização de URL.
+    inicializar_tema()
+    try:
+        st.query_params["tema"] = "claro" if st.session_state["tema_stang"] == "Claro" else "escuro"
+    except Exception:
+        # O tema continua funcionando mesmo se a URL estiver indisponível.
+        pass
 
 
 def controle_tema() -> None:
