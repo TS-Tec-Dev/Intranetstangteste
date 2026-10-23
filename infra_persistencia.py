@@ -25,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 BASE_DIR = Path(__file__).resolve().parent
 LOCAL_DIR = BASE_DIR / '.runtime_data'
 LOCAL_DIR.mkdir(exist_ok=True)
+REVISAO_PERSISTENCIA_RH = 'v2.0.4-hotfix-2026-10-23'
 DEFAULT_FILIAL = 'MANDALLA'
 GLOBAL = '_GLOBAL'
 DATABASE_FILES = {'banco_os.csv', 'banco_fms.csv', 'banco_compras.csv', 'banco_usuarios.csv'}
