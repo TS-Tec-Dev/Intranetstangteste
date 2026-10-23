@@ -3,15 +3,18 @@ import pandas as pd
 import streamlit as st
 from sqlalchemy.exc import IntegrityError
 import infra_persistencia as repo
+from impressao_conferencia_estoque import gerar_formulario_conferencia
 
 
 def renderizar(filial, usuario, administrador=False):
     st.markdown('# 🧰 Controle de Ferramentaria e Materiais')
     st.caption(f'Filial: **{filial}** · Estoque e histórico isolados para esta unidade')
-    tab_tools, tab_mats = st.tabs(['🛠️ Ferramentas', '📦 Materiais'])
+    tab_tools, tab_mats, tab_conf = st.tabs(['🛠️ Ferramentas', '📦 Materiais', '🖨️ Conferência Física'])
     for tab, tipo in ((tab_tools, 'FERRAMENTA'), (tab_mats, 'MATERIAL')):
         with tab:
             _painel_tipo(filial, usuario, administrador, tipo)
+    with tab_conf:
+        _painel_conferencia(filial, usuario)
 
 
 def _painel_tipo(filial, usuario, administrador, tipo):
@@ -159,3 +162,41 @@ def _painel_tipo(filial, usuario, administrador, tipo):
                         st.rerun()
                     except ValueError as exc:
                         st.error(str(exc))
+
+
+def _painel_conferencia(filial, usuario):
+    """Folha para contagem manual: consulta o banco, nunca registra ajuste de saldo."""
+    st.subheader('🖨️ Formulário de conferência física do estoque')
+    st.caption('Emita uma relação dos itens da filial com saldo no sistema e espaços para preencher a quantidade encontrada. '
+               'Nenhum estoque é modificado pela emissão do PDF.')
+    col1, col2, col3 = st.columns([2, 1, 1])
+    selecao = col1.selectbox('Itens que serão conferidos',
+        ['Materiais', 'Ferramentas', 'Materiais e ferramentas'], key='conf_tipo')
+    contagem_cega = col2.checkbox('Ocultar saldo esperado', value=False,
+        help='Para contagem independente: deixa a coluna de quantidade do sistema em branco.', key='conf_cega')
+    incluir_inativos = col3.checkbox('Incluir itens desativados', value=False, key='conf_inativos')
+    extras = st.number_input('Linhas extras para itens não cadastrados', min_value=0, max_value=25,
+                             value=5, step=1, key='conf_extras')
+    tipos = {'Materiais': ('MATERIAL',), 'Ferramentas': ('FERRAMENTA',),
+             'Materiais e ferramentas': ('MATERIAL', 'FERRAMENTA')}[selecao]
+    itens = [r for t in tipos for r in repo.listar_itens(filial, t)]
+    selecionados = [r for r in itens if incluir_inativos or int(r['ativo']) == 1]
+    st.info(f'**{len(selecionados)} itens** selecionados para impressão na filial **{filial}**. '
+            'O formulário inclui código, descrição, localização, unidade, saldo do sistema, '
+            'quantidade física, diferença, observações e assinaturas.')
+    if not selecionados:
+        st.warning('Não há itens cadastrados neste filtro. É possível imprimir uma folha em branco '
+                   'para levantamento inicial.')
+    try:
+        pdf = gerar_formulario_conferencia(
+            filial, itens, categorias=tipos, incluir_inativos=incluir_inativos,
+            contagem_cega=contagem_cega, linhas_extras=int(extras), usuario=usuario
+        )
+    except (ValueError, TypeError) as exc:
+        st.error(f'Não foi possível gerar o formulário: {exc}')
+        return
+    st.download_button('🖨️ Baixar formulário para impressão (PDF)', data=pdf,
+                       file_name=f'Conferencia_Estoque_{filial}_{selecao.replace(" ", "_")}.pdf',
+                       mime='application/pdf', type='primary', key='baixar_conferencia_estoque')
+    st.caption('Abra o PDF baixado e pressione **Ctrl+P** para imprimir em A4, modo paisagem. '
+               'Depois da contagem, diferenças devem ser lançadas somente pela aba Movimentações.')
