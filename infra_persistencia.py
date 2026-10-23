@@ -504,6 +504,39 @@ def atualizar_item(filial, item_id, descricao, unidade, localizacao, patrimonio,
         if res.rowcount != 1: raise ValueError('Item não encontrado nesta filial')
 
 
+def excluir_item_cadastro(filial, item_id, tipo):
+    """Exclusão lógica preserva transações, saldos e vínculo filial/tipo."""
+    from decimal import Decimal
+    from collections import defaultdict
+    with engine().begin() as conn:
+        cond = ((itens_tb.c.filial == filial) & (itens_tb.c.id == item_id)
+                & (itens_tb.c.tipo == tipo) & (itens_tb.c.ativo == 1))
+        if tipo == 'FERRAMENTA':
+            saldo_emprestimos = defaultdict(Decimal)
+            registros = conn.execute(select(mov_tb.c.tipo, mov_tb.c.quantidade, mov_tb.c.responsavel).where(
+                (mov_tb.c.filial == filial) & (mov_tb.c.item_id == item_id) &
+                mov_tb.c.tipo.in_(['EMPRÉSTIMO', 'DEVOLUÇÃO'])
+            )).all()
+            for r in registros:
+                usuario = (r.responsavel or '').strip().casefold()
+                saldo_emprestimos[usuario] += Decimal(str(r.quantidade)) * (
+                    1 if r.tipo == 'EMPRÉSTIMO' else -1)
+            if any(pendente > 0 for pendente in saldo_emprestimos.values()):
+                raise ValueError('Há ferramentas emprestadas. Registre a devolução antes de excluir.')
+        res = conn.execute(update(itens_tb).where(cond).values(ativo=0))
+        if res.rowcount != 1:
+            raise ValueError('Item não encontrado ou já excluído nesta filial.')
+
+
+def reativar_item_cadastro(filial, item_id, tipo):
+    with engine().begin() as conn:
+        cond = ((itens_tb.c.filial == filial) & (itens_tb.c.id == item_id)
+                & (itens_tb.c.tipo == tipo) & (itens_tb.c.ativo == 0))
+        res = conn.execute(update(itens_tb).where(cond).values(ativo=1))
+        if res.rowcount != 1:
+            raise ValueError('Item não encontrado ou já ativo nesta filial.')
+
+
 def movimentar_item(filial, item_id, movimento, quantidade, usuario, responsavel='', documento='', observacoes=''):
     from decimal import Decimal
     qtd = Decimal(str(quantidade))

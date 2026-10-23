@@ -1640,7 +1640,7 @@ if menu is not None:
     # --- TELA 4: FORMULÁRIOS E PRAZOS (FMS) ---
     elif menu == "📅 Formulários e Prazos (FMs)":
         st.markdown("# 📅 Gestão de Conformidade de Formulários (FMs)")
-        tab_fm1, tab_fm2, tab_fm3 = st.tabs(["➕ Registrar / 🔄 Renovar FM", "🗑️ Excluir FM", "📊 Painel de Prazos e Status"])
+        tab_fm1, tab_fm2, tab_fm3, tab_fm4 = st.tabs(["➕ Registrar / 🔄 Renovar FM", "🗑️ Excluir FM", "📊 Painel de Prazos e Status", "📁 Biblioteca de FMs (PDF)"])
         
         dias_dict = {
             "Diário (1 dia)": 1,
@@ -1729,6 +1729,7 @@ if menu is not None:
 
         with tab_fm3:
             st.subheader("Painel de Prazos e Status dos FMs")
+            st.caption("Os modelos PDF para download, inclusão ou exclusão estão na aba 📁 Biblioteca de FMs (PDF).")
             df_fms = repositorio.ler_csv(ARQUIVO_FMS, dtype=str)
 
             if not df_fms.empty:
@@ -1840,6 +1841,10 @@ if menu is not None:
                 )
             else:
                 st.info("Nenhum FM cadastrado.")
+        with tab_fm4:
+            import mod_fm_biblioteca
+            mod_fm_biblioteca.renderizar(st.session_state.filial_ativa, is_user_admin)
+
     # --- TELA 5: SOLICITAÇÕES DE COMPRAS ---
     elif menu == "🛒 Solicitações de Compras":
         st.markdown("# 🛒 Solicitações de Materiais e Insumos")

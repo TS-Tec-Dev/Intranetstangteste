@@ -22,10 +22,11 @@ def _painel_tipo(filial, usuario, administrador, tipo):
     k1.metric('Itens cadastrados',len(ativos))
     k2.metric('Quantidade em estoque',f'{sum(float(r["estoque"]) for r in ativos):,.1f}')
     k3.metric('No estoque mínimo ou abaixo',len(deficit))
-    aba1,aba2,aba3,aba4 = st.tabs(['📋 Estoque','➕ Cadastro','🔄 Movimentações','🕘 Histórico'])
+    aba1,aba2,aba3,aba4,aba5 = st.tabs(['📋 Estoque','➕ Cadastro','🔄 Movimentações','🕘 Histórico','🗑️ Excluir / Reativar'])
     with aba1:
         busca = st.text_input('Pesquisar código ou descrição',key=f'busca_{tipo}',placeholder='Nome, código, patrimônio ou localização')
-        exib = [r for r in itens if busca.lower() in ' '.join(str(r.get(k,'')) for k in ('codigo','descricao','patrimonio','localizacao')).lower()]
+        mostrar_inativos = st.checkbox('Mostrar itens excluídos / desativados', value=False, key=f'mostrar_inativos_{tipo}')
+        exib = [r for r in itens if (mostrar_inativos or int(r['ativo']) == 1) and busca.lower() in ' '.join(str(r.get(k,'')) for k in ('codigo','descricao','patrimonio','localizacao')).lower()]
         if exib:
             df = pd.DataFrame(exib)
             df['alerta'] = df.apply(lambda r: '⚠️ Mínimo' if r['ativo'] and r['estoque'] <= r['minimo'] else '',axis=1)
@@ -117,3 +118,44 @@ def _painel_tipo(filial, usuario, administrador, tipo):
                 st.markdown('#### Ferramentas emprestadas e não devolvidas')
                 if abertos:st.dataframe(pd.DataFrame(abertos),hide_index=True,use_container_width=True)
                 else:st.success('Sem empréstimos pendentes entre as movimentações consultadas.')
+
+    with aba5:
+        st.subheader('🗑️ Excluir itens do cadastro')
+        st.caption('A exclusão retira o item do estoque ativo. Registros que tiveram movimentações permanecem no histórico para auditoria.')
+        if not administrador:
+            st.info('Somente administradores podem excluir ou reativar itens cadastrados.')
+        elif not itens:
+            st.info('Ainda não há cadastros nesta categoria.')
+        else:
+            disponiveis = [r for r in itens if int(r['ativo']) == 1]
+            arquivados = [r for r in itens if int(r['ativo']) == 0]
+            if disponiveis:
+                opcoes = {f'{r["codigo"]} — {r["descricao"]} (saldo {r["estoque"]} {r["unidade"]})':r for r in disponiveis}
+                escolhido = st.selectbox('Selecione o item a excluir', list(opcoes), key=f'item_excluir_{tipo}')
+                item = opcoes[escolhido]
+                st.warning('O item deixará de aparecer no estoque ativo e não poderá receber novas movimentações. Histórico anterior será mantido.')
+                with st.form(f'confirmar_exclusao_{tipo}_{item["id"]}'):
+                    confirmado = st.checkbox('Confirmo a exclusão deste cadastro', key=f'conf_excluir_{tipo}')
+                    if st.form_submit_button('🗑️ Excluir item selecionado', type='primary'):
+                        if not confirmado:
+                            st.error('Marque a confirmação antes de excluir.')
+                        else:
+                            try:
+                                repo.excluir_item_cadastro(filial, item['id'], tipo)
+                                st.success('Item retirado do cadastro ativo, mantendo o histórico de movimentações.')
+                                st.rerun()
+                            except ValueError as exc:
+                                st.error(str(exc))
+            else:
+                st.info('Não existem itens ativos para excluir.')
+            if arquivados:
+                st.markdown('#### ♻️ Reativar item excluído')
+                o2 = {f'{r["codigo"]} — {r["descricao"]}':r for r in arquivados}
+                k2 = st.selectbox('Item excluído', list(o2), key=f'item_reativar_{tipo}')
+                if st.button('♻️ Reativar cadastro', key=f'reativar_{tipo}'):
+                    try:
+                        repo.reativar_item_cadastro(filial, o2[k2]['id'], tipo)
+                        st.success('Cadastro reativado.')
+                        st.rerun()
+                    except ValueError as exc:
+                        st.error(str(exc))
