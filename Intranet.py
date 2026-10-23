@@ -58,6 +58,7 @@ TODOS_MENUS = [
     "✍️ Painel de Assinaturas",
     "📊 Dashboard",
     "🧰 Ferramentaria",
+    "👥 Gestão de RH",
     "🏢 Filiais e Backup"
 ]
 
@@ -1079,9 +1080,9 @@ if not filiais_autorizadas:
 if st.session_state.get("filial_ativa") not in filiais_autorizadas:
     st.session_state.filial_ativa = filiais_autorizadas[0]
 if not is_user_admin:
-    menus_disponiveis = [m for m in menus_disponiveis if m != "🏢 Filiais e Backup"]
+    menus_disponiveis = [m for m in menus_disponiveis if m not in ("🏢 Filiais e Backup", "👥 Gestão de RH")]
 if is_user_admin:
-    for m in ("🧰 Ferramentaria", "🏢 Filiais e Backup"):
+    for m in ("🧰 Ferramentaria", "👥 Gestão de RH", "🏢 Filiais e Backup"):
         if m not in menus_disponiveis:menus_disponiveis.append(m)
 
 # --- BARRA LATERAL (MENU) ---
@@ -1124,7 +1125,7 @@ with st.sidebar:
         st.session_state.pop("backup_contas_encrypted", None)
         st.rerun()
     st.info(f"🏢 {nomes_filiais[st.session_state.filial_ativa]}\nStatus: Conectado 🟢")
-    st.caption("Versão 2.0.2")
+    st.caption("Versão 2.0.4 — RH")
     
     st.markdown("<div style='text-align: left; font-style: italic; font-size: 11px; opacity: 0.7; margin-top: 25px;'><i>By: TS tech</i></div>", unsafe_allow_html=True)
 
@@ -1133,6 +1134,9 @@ if menu is not None:
     if menu == "🧰 Ferramentaria":
         import mod_ferramentaria
         mod_ferramentaria.renderizar(st.session_state.filial_ativa, st.session_state.usuario, is_user_admin)
+    elif menu == "👥 Gestão de RH" and is_user_admin:
+        import mod_rh
+        mod_rh.renderizar(st.session_state.filial_ativa, st.session_state.usuario, is_user_admin)
     elif menu == "🏢 Filiais e Backup" and is_user_admin:
         import mod_filiais_backup
         mod_filiais_backup.renderizar(st.session_state.filial_ativa)

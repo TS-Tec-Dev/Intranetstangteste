@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import (
-    Column, DateTime, ForeignKey, Integer, LargeBinary, MetaData, Numeric, String,
+    Column, Date, DateTime, ForeignKey, Integer, LargeBinary, MetaData, Numeric, String,
     Table, Text, UniqueConstraint, create_engine, delete, func, insert, select, update
 )
 from sqlalchemy.exc import IntegrityError
@@ -71,6 +71,77 @@ mov_tb = Table('intr_almox_movimentos', metadata,
     Column('saldo_apos', Numeric(16,3), nullable=False), Column('responsavel', String(180), nullable=False, default=''),
     Column('usuario', String(100), nullable=False), Column('documento', String(140), nullable=False, default=''),
     Column('observacoes', Text, nullable=False, default=''), Column('data', DateTime, nullable=False))
+
+
+# RH: dados segregados por filial. Sem prontuários ou resultados clínicos.
+rh_colaboradores_tb = Table('intr_rh_colaboradores', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('filial', String(40), nullable=False),
+    Column('matricula', String(50), nullable=False), Column('nome', String(180), nullable=False),
+    Column('setor', String(120), nullable=False, default=''),
+    Column('cargo', String(120), nullable=False, default=''),
+    Column('admissao', Date, nullable=False),
+    Column('monitorar_ferias_desde', Date, nullable=False),
+    Column('jornada_diaria_min', Integer, nullable=False, default=480),
+    Column('ativo', Integer, nullable=False, default=1),
+    Column('observacoes', String(500), nullable=False, default=''),
+    UniqueConstraint('filial','matricula', name='uq_intr_rh_matricula'))
+rh_ciclos_tb = Table('intr_rh_ciclos', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('filial', String(40), nullable=False),
+    Column('colaborador_id', Integer, ForeignKey('intr_rh_colaboradores.id'), nullable=False),
+    Column('aquisitivo_inicio', Date, nullable=False),
+    Column('faltas_injustificadas', Integer, nullable=False, default=0),
+    Column('observacao', String(400), nullable=False, default=''),
+    UniqueConstraint('filial','colaborador_id','aquisitivo_inicio', name='uq_intr_rh_ciclo'))
+rh_ferias_tb = Table('intr_rh_ferias', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('filial', String(40), nullable=False),
+    Column('colaborador_id', Integer, ForeignKey('intr_rh_colaboradores.id'), nullable=False),
+    Column('aquisitivo_inicio', Date, nullable=False),
+    Column('inicio', Date, nullable=False), Column('fim', Date, nullable=False),
+    Column('dias', Integer, nullable=False),
+    Column('situacao', String(30), nullable=False, default='Programadas'),
+    Column('concordancia_fracionamento', Integer, nullable=False, default=0),
+    Column('observacoes', String(500), nullable=False, default=''),
+    Column('usuario', String(100), nullable=False, default=''),
+    Column('criado_em', DateTime, nullable=False))
+rh_horas_tb = Table('intr_rh_horas', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('filial', String(40), nullable=False),
+    Column('colaborador_id', Integer, ForeignKey('intr_rh_colaboradores.id'), nullable=False),
+    Column('dia', Date, nullable=False),
+    Column('entrada', String(5), nullable=False), Column('saida', String(5), nullable=False),
+    Column('intervalo_min', Integer, nullable=False, default=0),
+    Column('previsto_min', Integer, nullable=False),
+    Column('trabalhado_min', Integer, nullable=False),
+    Column('saldo_min', Integer, nullable=False),
+    Column('observacoes', String(500), nullable=False, default=''),
+    Column('usuario', String(100), nullable=False), Column('atualizado_em', DateTime, nullable=False),
+    UniqueConstraint('filial','colaborador_id','dia', name='uq_intr_rh_dia'))
+rh_asos_tb = Table('intr_rh_asos', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('filial', String(40), nullable=False),
+    Column('colaborador_id', Integer, ForeignKey('intr_rh_colaboradores.id'), nullable=False),
+    Column('tipo', String(60), nullable=False),
+    Column('realizado_em', Date, nullable=True),
+    Column('vencimento', Date, nullable=False),
+    Column('agendado_para', Date, nullable=True),
+    Column('situacao_agendamento', String(30), nullable=False, default='Não agendado'),
+    Column('observacoes', String(500), nullable=False, default=''),
+    Column('atualizado_em', DateTime, nullable=False))
+rh_auditoria_tb = Table('intr_rh_auditoria', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('filial', String(40), nullable=False), Column('tabela', String(60), nullable=False),
+    Column('registro_id', Integer, nullable=False), Column('acao', String(35), nullable=False),
+    Column('antes', Text, nullable=True), Column('usuario', String(100), nullable=False),
+    Column('data', DateTime, nullable=False))
+
+RH_TABLES = {
+    'colaboradores': rh_colaboradores_tb, 'ciclos': rh_ciclos_tb,
+    'ferias': rh_ferias_tb, 'horas': rh_horas_tb, 'asos': rh_asos_tb,
+    'auditoria': rh_auditoria_tb,
+}
 
 
 def _now():
@@ -366,12 +437,15 @@ def backup_filial(filial, incluir_usuarios=False):
         docs = conn.execute(select(docs_tb).where(docs_tb.c.filial.in_(scope_list))).mappings().all()
         itens = conn.execute(select(itens_tb).where(itens_tb.c.filial==filial)).mappings().all()
         movimentos = conn.execute(select(mov_tb).where(mov_tb.c.filial==filial)).mappings().all()
+        rh_rows = {nome: [dict(x) for x in conn.execute(select(t).where(t.c.filial==filial)).mappings().all()] for nome,t in RH_TABLES.items()}
     output = io.BytesIO()
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         z.writestr('manifest.json', json.dumps({'aplicativo':'IntranetStang','versao_formato':1,
                 'filial':filial,'inclui_usuarios':incluir_usuarios,'gerado_em':_now().isoformat()}, indent=2))
         z.writestr(f'inventario/{filial}/itens.json', json.dumps([dict(r) for r in itens], default=str, ensure_ascii=False))
         z.writestr(f'inventario/{filial}/movimentos.json', json.dumps([dict(r) for r in movimentos], default=str, ensure_ascii=False))
+        for nome, regs_rh in rh_rows.items():
+            z.writestr(f'rh/{filial}/{nome}.json', json.dumps(regs_rh, ensure_ascii=False, default=str))
         for r in regs:
             z.writestr(f'dados/{r["filial"]}/{r["arquivo"]}', bytes(r['conteudo']))
         for d in docs:
@@ -386,6 +460,7 @@ def restaurar_filial(blob, filial, incluir_usuarios=False):
         raise ValueError('Backup acima do limite de 200 MB')
     planos_csv, planos_doc = [], []
     inventario = {}
+    rh_import = {}
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
         if z.testzip() is not None:
             raise ValueError('Backup ZIP com erro de integridade')
@@ -419,6 +494,12 @@ def restaurar_filial(blob, filial, incluir_usuarios=False):
                 inventario[parts[2]] = json.loads(z.read(item))
                 if not isinstance(inventario[parts[2]],list) or len(inventario[parts[2]])>100000:
                     raise ValueError('Inventário inválido ou excessivamente grande')
+            elif parts[0] == 'rh' and len(parts)==3 and scope==filial and parts[2].endswith('.json'):
+                nome_rh = parts[2][:-5]
+                if nome_rh not in RH_TABLES: raise ValueError('Tabela RH desconhecida no backup')
+                rh_import[nome_rh] = json.loads(z.read(item))
+                if not isinstance(rh_import[nome_rh], list) or len(rh_import[nome_rh]) > 200000:
+                    raise ValueError('Dados RH inválidos ou grandes demais')
             elif parts[0] == 'documentos':
                 caminho = '/'.join(parts[2:])
                 _doc_valid(caminho)
@@ -427,9 +508,45 @@ def restaurar_filial(blob, filial, incluir_usuarios=False):
                 planos_doc.append((scope,caminho,z.read(item)))
             else:
                 raise ValueError('Entrada não reconhecida no backup')
-    if not planos_csv and not inventario:
+    if not planos_csv and not inventario and not rh_import:
         raise ValueError('Este ZIP não contém dados para restaurar')
+    # Validação de formato e filial antes de alterar qualquer dado do banco.
+    if rh_import:
+        esperadas = set(RH_TABLES)
+        if set(rh_import) != esperadas:
+            raise ValueError('Backup RH incompleto: restauração cancelada')
+        for tabela_nome, rows in rh_import.items():
+            permitidos = set(RH_TABLES[tabela_nome].c.keys())
+            for row in rows:
+                if not isinstance(row, dict) or row.get('filial') != filial or not set(row).issubset(permitidos):
+                    raise ValueError('Backup RH com campos ou filial inválidos')
     with engine().begin() as conn:
+        if rh_import:
+            # Restaura apenas RH da filial escolhida, respeitando as chaves estrangeiras.
+            for nm in ('auditoria','horas','asos','ferias','ciclos','colaboradores'):
+                conn.execute(delete(RH_TABLES[nm]).where(RH_TABLES[nm].c.filial==filial))
+            mapas = {}
+            for row in rh_import['colaboradores']:
+                v = {k:val for k,val in row.items() if k!='id'}
+                for datekey in ('admissao','monitorar_ferias_desde'):
+                    v[datekey] = datetime.fromisoformat(v[datekey]).date()
+                n = conn.execute(insert(rh_colaboradores_tb).values(**v)).inserted_primary_key[0]
+                mapas[row['id']] = n
+            for nm in ('ciclos','ferias','horas','asos'):
+                for row in rh_import[nm]:
+                    v = {k:val for k,val in row.items() if k!='id'}
+                    if v['colaborador_id'] not in mapas:
+                        raise ValueError('Backup RH referencia colaborador ausente')
+                    v['colaborador_id'] = mapas[v['colaborador_id']]
+                    for k in ('aquisitivo_inicio','inicio','fim','dia','realizado_em','vencimento','agendado_para'):
+                        if k in v and v[k] is not None: v[k]=datetime.fromisoformat(v[k]).date()
+                    for k in ('criado_em','atualizado_em'):
+                        if k in v and v[k] is not None: v[k]=datetime.fromisoformat(v[k])
+                    conn.execute(insert(RH_TABLES[nm]).values(**v))
+            for row in rh_import['auditoria']:
+                v = {k:val for k,val in row.items() if k!='id'}
+                v['data']=datetime.fromisoformat(v['data'])
+                conn.execute(insert(rh_auditoria_tb).values(**v))
         if 'itens.json' in inventario and 'movimentos.json' in inventario:
             from decimal import Decimal
             conn.execute(delete(mov_tb).where(mov_tb.c.filial==filial))
