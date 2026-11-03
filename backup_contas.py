@@ -228,7 +228,7 @@ def visualizar_backup_contas(blob, senha):
             'nomes':[str(x) for x in df['Usuario']]}
 
 
-def restaurar_backup_contas(blob, senha, *, administrador, senha_admin):
+def restaurar_backup_contas(blob, senha, *, administrador, senha_admin, conexao_externa=None):
     """Concilia por nome de login. Preserva contas que não estão no backup.
 
     Importação, documentos e cadastro de filiais são transacionais no PostgreSQL.
@@ -257,7 +257,8 @@ def restaurar_backup_contas(blob, senha, *, administrador, senha_admin):
     if not (atuais['Admin']=='Sim').any():
         raise ValueError('Restauração não pode remover o último administrador.')
     csv_final = atuais.to_csv(index=False).encode('utf-8-sig')
-    with repo.engine().begin() as conn:
+    from contextlib import nullcontext
+    with (nullcontext(conexao_externa) if conexao_externa is not None else repo.engine().begin()) as conn:
         existentes = set(conn.execute(select(repo.filiais_tb.c.codigo)).scalars().all())
         for f in filiais:
             if f['codigo'] not in existentes:
@@ -273,13 +274,14 @@ def restaurar_backup_contas(blob, senha, *, administrador, senha_admin):
             else:
                 conn.execute(insert(repo.docs_tb).values(filial=repo.GLOBAL,caminho=caminho,
                                                      conteudo=conteudo,alterado_em=repo._now()))
-    repo._revisions().pop(repo._revision_key(repo.GLOBAL,'banco_usuarios.csv'),None)
-    # Atualiza arquivos locais já em cache; no próximo deploy são recuperados do banco.
-    for caminho,conteudo in docs.items():
-        try:
-            p = Path(caminho)
-            p.parent.mkdir(parents=True,exist_ok=True)
-            p.write_bytes(conteudo)
-        except OSError:
-            pass  # O backup permanece gravado no banco persistente.
+    if conexao_externa is None:
+        repo._revisions().pop(repo._revision_key(repo.GLOBAL,'banco_usuarios.csv'),None)
+        # Somente atualizar cache de arquivos após commit bem sucedido.
+        for caminho,conteudo in docs.items():
+            try:
+                p = Path(caminho)
+                p.parent.mkdir(parents=True,exist_ok=True)
+                p.write_bytes(conteudo)
+            except OSError:
+                pass
     return {'adicionados':adicionados,'atualizados':atualizados,'assinaturas':len(docs),'filiais':len(filiais)}

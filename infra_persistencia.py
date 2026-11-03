@@ -456,7 +456,7 @@ def backup_filial(filial, incluir_usuarios=False):
     return output.getvalue()
 
 
-def restaurar_filial(blob, filial, incluir_usuarios=False):
+def restaurar_filial(blob, filial, incluir_usuarios=False, *, conexao_externa=None):
     if len(blob) > 200_000_000:
         raise ValueError('Backup acima do limite de 200 MB')
     planos_csv, planos_doc = [], []
@@ -521,7 +521,8 @@ def restaurar_filial(blob, filial, incluir_usuarios=False):
             for row in rows:
                 if not isinstance(row, dict) or row.get('filial') != filial or not set(row).issubset(permitidos):
                     raise ValueError('Backup RH com campos ou filial inválidos')
-    with engine().begin() as conn:
+    from contextlib import nullcontext
+    with (nullcontext(conexao_externa) if conexao_externa is not None else engine().begin()) as conn:
         if rh_import:
             # Restaura apenas RH da filial escolhida, respeitando as chaves estrangeiras.
             for nm in ('auditoria','horas','asos','ferias','ciclos','colaboradores'):
@@ -578,11 +579,16 @@ def restaurar_filial(blob, filial, incluir_usuarios=False):
                              .values(conteudo=data, alterado_em=_now()))
             else:
                 conn.execute(insert(docs_tb).values(filial=scope,caminho=caminho,conteudo=data,alterado_em=_now()))
-    _revisions().clear()
-    for scope, caminho, data in planos_doc:
-        p = Path(caminho)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_bytes(data)
+    if conexao_externa is None:
+        _revisions().clear()
+        for scope, caminho, data in planos_doc:
+            # O banco é a fonte de verdade; a cópia local não é essencial.
+            try:
+                p = Path(caminho)
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(data)
+            except OSError:
+                pass
     return len(planos_csv), len(planos_doc)
 
 

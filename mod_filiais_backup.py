@@ -1,208 +1,119 @@
-"""Administração de filiais, backups completos e restauração intencional."""
+"""Tela simplificada da Intranet Stang: SOMENTE exportação/importação de backup completo."""
 from datetime import datetime
-import pandas as pd
+import hashlib
 import streamlit as st
-from sqlalchemy.exc import IntegrityError
+
 import infra_persistencia as repo
+import backup_unificado
+from controle_acesso_filiais import validar_sessao
 
-VERSAO = '2.0.2'
+VERSAO = '2.0.5'
 
 
-def renderizar(filial):
-    st.markdown('# 🏢 Filiais, Atualizações e Backup')
-    st.caption(f'Intranet Stang v{VERSAO} · Os bancos persistem fora do repositório GitHub')
-    if repo.modo_producao():
-        st.success('✅ Banco externo configurado. Atualizações de código não sobrescrevem os registros remotos.')
-    else:
-        st.warning('⚠️ MODO LOCAL: configure DATABASE_URL no Streamlit Cloud. SQLite local NÃO sobrevive a reinicializações do servidor.')
-    tab_f,tab_b,tab_u,tab_p,tab_m,tab_i,tab_h,tab_v=st.tabs(['🏢 Filiais','💾 Backup ZIP','🔐 Contas e credenciais','📩 Importar perfis','👥 Migrar usuários','📤 Importar resgate 2026','🕒 Versões anteriores','🚀 Atualizações'])
-    with tab_f:
-        lista=repo.listar_filiais()
-        st.dataframe(pd.DataFrame(lista).rename(columns={'codigo':'Código','nome':'Nome da filial','ativo':'Ativo'}),
-            hide_index=True,use_container_width=True)
-        with st.form('cadastrar_filial'):
-            st.markdown('#### Cadastrar nova filial')
-            c1,c2=st.columns([1,2])
-            codigo=c1.text_input('Código (ex.: JOINVILLE)')
-            nome=c2.text_input('Nome / Localidade')
-            if st.form_submit_button('Cadastrar filial'):
+def renderizar(filial, usuario=None):
+    usuario = usuario or st.session_state.get('usuario', '')
+    try:
+        _, _, _, acesso_global = validar_sessao(usuario, filial, repo)
+    except PermissionError as exc:
+        st.error(str(exc))
+        return
+
+    st.markdown('# 🗄️ Backup da Intranet Stang')
+    st.caption('Um único arquivo criptografado para todos os usuários, filiais, compras, O.S., FMs, documentos, RH e ferramentaria.')
+    if not repo.modo_producao():
+        st.error('Banco externo não configurado. Não faça backups para produção em SQLite temporário.')
+        return
+    if not acesso_global:
+        st.warning('O backup geral contém dados e credenciais de todas as filiais. Somente um administrador autorizado a TODAS as filiais pode exportá-lo ou restaurá-lo.')
+        return
+    st.info('Backups da versão anterior permanecem guardados onde você os salvou. A partir desta versão, use apenas um arquivo **.stangtotal** para as novas cópias completas.')
+    aba_exportar, aba_importar = st.tabs(['📤 Exportar backup', '📥 Importar backup'])
+
+    with aba_exportar:
+        st.subheader('Exportar todos os dados')
+        st.caption('Inclui as contas e permissões, hashes de senha de login, e-mails/tokens SMTP, assinaturas, todas as filiais e seus PDFs. Não envie este arquivo ao GitHub.')
+        with st.form('form_backup_unificado_v205'):
+            senha_admin = st.text_input('Sua senha atual de administrador', type='password')
+            chave = st.text_input('Crie a senha de proteção do backup (mínimo 14 caracteres)', type='password')
+            chave2 = st.text_input('Confirme a senha de proteção', type='password')
+            confirmado = st.checkbox('Estou ciente de que o arquivo contém informações empresariais e credenciais protegidas.')
+            gerar = st.form_submit_button('🔐 Preparar backup completo')
+        if gerar:
+            if not confirmado or chave != chave2:
+                st.error('Marque a confirmação e confira as duas senhas de proteção.')
+            else:
                 try:
-                    repo.cadastrar_filial(codigo,nome)
-                    st.success('Filial cadastrada, com dados independentes. Vincule usuários a ela no gerenciamento de contas.');st.rerun()
-                except (ValueError,IntegrityError) as ex:st.error(str(ex))
-        st.info('Administradores podem alternar entre todas as filiais. Usuários comuns só têm acesso às filiais cadastradas em seu perfil.')
-    with tab_b:
-        st.markdown('#### Exportação de backup completo')
-        st.write('O arquivo ZIP contém os CSVs, anexos e ferramentaria da filial. Contas de acesso e assinaturas são exportadas separadamente, criptografadas, na aba 🔐 Contas e credenciais.')
-        incluir=False
-        if st.button('Preparar backup para download',key='gerar_zip'):
-            try:
-                st.session_state['backup_zip'] = repo.backup_filial(filial,incluir)
-                st.session_state['backup_filial'] = filial
-                st.session_state['backup_usuarios'] = incluir
-            except Exception as ex:st.error(str(ex))
-        if st.session_state.get('backup_zip') and st.session_state.get('backup_filial')==filial and st.session_state.get('backup_usuarios')==incluir:
-            st.download_button('📥 Baixar backup ZIP',st.session_state['backup_zip'],
-                file_name=f'backup_intranet_{filial}_{datetime.now():%Y%m%d_%H%M}.zip',mime='application/zip')
-        st.divider()
-        st.markdown('#### Restauração controlada')
-        arquivo=st.file_uploader('Selecionar ZIP gerado pela Intranet',type=['zip'],key='zip_restore')
-        restaurar_users=False
-        st.caption('Para recuperar usuários, senhas, e-mails, permissões e assinaturas, utilize a aba 🔐 Contas e credenciais.')
-        confirmar=st.checkbox(f'Estou ciente de que a restauração substituirá os dados ATUAIS da filial {filial}',value=False)
-        if st.button('♻️ Restaurar backup',disabled=not(arquivo and confirmar),type='primary'):
-            try:
-                n_bancos,n_docs=repo.restaurar_filial(arquivo.getvalue(),filial,restaurar_users)
-                st.success(f'Restauração concluída: {n_bancos} bancos e {n_docs} anexos. Atualize a tela.')
-                st.session_state.pop('backup_zip',None)
-                st.rerun()
-            except Exception as ex:st.error(f'Restauração não realizada: {ex}')
-        st.caption('Snapshots automáticos das últimas 20 alterações de cada CSV ficam no banco externo. Guarde também backups ZIP em local seguro fora do servidor.')
-    with tab_u:
-        import backup_contas
-        st.markdown('### 🔐 Backup completo de usuários e acessos')
-        st.info('Inclui TODOS os usuários de TODAS as filiais: login, hash da senha atual, validade, perfil Admin, permissões, filiais autorizadas, e-mail, senha/token SMTP, servidor e porta SMTP, além das imagens PNG de assinatura. Nenhuma senha de login aparece em texto puro. O arquivo é criptografado.')
-        st.caption('Usuários e seus documentos permanecem no PostgreSQL nas atualizações normais do GitHub. Este backup é uma proteção adicional para migrações, troca de banco ou desastres.')
-        with st.form('form_export_contas'):
-            senha_admin_exp = st.text_input('Sua senha de administrador (autorizar exportação)',type='password',key='confirma_admin_export')
-            senha_zip_exp = st.text_input('Crie uma senha exclusiva para proteger o backup (mínimo 14 caracteres)',type='password',key='chave_export')
-            senha_zip_exp2 = st.text_input('Repita a senha de proteção',type='password',key='chave_export2')
-            gerar_contas = st.form_submit_button('🔒 Gerar backup de contas criptografado')
-            if gerar_contas:
-                if senha_zip_exp != senha_zip_exp2:
-                    st.error('As senhas de proteção não conferem.')
+                    st.session_state['backup_total_2026'] = backup_unificado.gerar_backup(
+                        usuario=usuario, senha_admin=senha_admin, senha_backup=chave
+                    )
+                    st.session_state['backup_total_usuario'] = usuario
+                    st.success('Cópia completa gerada. Baixe e guarde a senha em outro local seguro.')
+                except (ValueError, PermissionError, RuntimeError, OSError) as exc:
+                    st.error('Não foi possível gerar o backup: ' + str(exc))
+        if st.session_state.get('backup_total_2026') and st.session_state.get('backup_total_usuario') == usuario:
+            st.download_button('📥 Baixar backup completo (.stangtotal)',
+                data=st.session_state['backup_total_2026'],
+                file_name=f'IntranetStang_COMPLETO_{datetime.now():%Y%m%d_%H%M}.stangtotal',
+                mime='application/octet-stream', use_container_width=True)
+        st.caption('Para evitar divergências entre lançamentos feitos ao mesmo tempo, gere backups preferencialmente fora do horário de operação.')
+
+    with aba_importar:
+        st.subheader('Importar backup completo')
+        st.warning('A restauração substituirá os dados operacionais das filiais contidas no arquivo e poderá restaurar senhas e permissões anteriores. Faça uma cópia do estado ATUAL antes de confirmar.')
+        arquivo = st.file_uploader('Arquivo completo .stangtotal', type=['stangtotal'], key='restore_total_upload_v205')
+        senha_import = st.text_input('Senha usada para proteger este arquivo', type='password', key='restore_total_pass_v205')
+        if st.button('🔎 Conferir integridade e conteúdo', key='restore_total_preview_btn_v205'):
+            if not arquivo or not senha_import:
+                st.error('Selecione o arquivo e informe a senha de proteção.')
+            else:
+                try:
+                    resumo = backup_unificado.visualizar_backup(arquivo.getvalue(), senha_import)
+                    st.session_state['restore_total_previa_v205'] = resumo
+                    st.session_state['restore_total_hash_v205'] = hashlib.sha256(arquivo.getvalue()).hexdigest()
+                except (ValueError, OSError, RuntimeError) as exc:
+                    st.session_state.pop('restore_total_previa_v205', None)
+                    st.error('Arquivo inválido ou senha incorreta: ' + str(exc))
+        esperado = hashlib.sha256(arquivo.getvalue()).hexdigest() if arquivo else None
+        previa = (st.session_state.get('restore_total_previa_v205') if esperado == st.session_state.get('restore_total_hash_v205') else None)
+        if previa:
+            c1, c2, c3 = st.columns(3)
+            c1.metric('Filiais', previa['filiais'])
+            c2.metric('Usuários', previa['usuarios'])
+            c3.metric('Assinaturas', previa['assinaturas'])
+            st.caption('Filiais: ' + ', '.join(previa['filiais_codigos']))
+            st.caption('Gerado em (UTC): ' + str(previa['gerado_em']))
+            st.divider()
+            senha_admin_rest = st.text_input('Sua senha atual de administrador (autorizar restauração)', type='password', key='admin_rest_total_v205')
+            if st.button('🛡️ Gerar cópia de segurança dos dados ATUAIS', key='gerar_pre_restore_total_v205'):
+                try:
+                    copia = backup_unificado.gerar_backup(
+                        usuario=usuario, senha_admin=senha_admin_rest, senha_backup=senha_import
+                    )
+                    st.session_state['pre_restore_total_v205'] = copia
+                    st.session_state['pre_restore_hash_v205'] = esperado
+                    st.success('Baixe a cópia dos dados atuais ANTES de continuar.')
+                except (ValueError, PermissionError, RuntimeError, OSError) as exc:
+                    st.error('Não foi possível gerar cópia atual: ' + str(exc))
+            if st.session_state.get('pre_restore_hash_v205') == esperado and st.session_state.get('pre_restore_total_v205'):
+                st.download_button('⬇️ Baixar backup ANTERIOR à restauração',
+                    data=st.session_state['pre_restore_total_v205'],
+                    file_name=f'ANTES_DA_RESTAURACAO_{datetime.now():%Y%m%d_%H%M}.stangtotal',
+                    mime='application/octet-stream', use_container_width=True)
+            aceite = st.checkbox('Já baixei o backup atual e aceito restaurar os dados e as contas incluídos no arquivo.', key='aceito_rest_total_v205')
+            frase = st.text_input('Digite RESTAURAR para confirmar', key='frase_rest_total_v205')
+            if st.button('♻️ Restaurar backup completo', type='primary', key='rest_total_btn_v205'):
+                if not (aceite and frase == 'RESTAURAR' and senha_admin_rest and st.session_state.get('pre_restore_hash_v205') == esperado):
+                    st.error('Faça a cópia de segurança atual, marque a confirmação e digite RESTAURAR.')
                 else:
                     try:
-                        st.session_state['backup_contas_encrypted'] = backup_contas.criar_backup_contas(
-                            senha_zip_exp,administrador=st.session_state.usuario,senha_admin=senha_admin_exp)
-                        st.success('Backup criptografado gerado. Baixe e guarde a senha em local SEPARADO.')
-                    except (ValueError, RuntimeError, OSError) as ex:
-                        st.error(str(ex))
-        if st.session_state.get('backup_contas_encrypted'):
-            st.download_button('📥 Baixar backup de TODOS os usuários (.stangbak)',
-                st.session_state['backup_contas_encrypted'],
-                file_name=f'CONTAS_IntranetStang_{datetime.now():%Y%m%d_%H%M}.stangbak',
-                mime='application/octet-stream')
-        st.warning('Guarde o arquivo e a senha em cofres separados. Se perder a senha de proteção, o arquivo NÃO poderá ser recuperado. NÃO envie o backup ao GitHub, WhatsApp público ou serviços sem controle de acesso.')
-        st.divider()
-        st.markdown('### ♻️ Restaurar usuários e configurações')
-        st.caption('A restauração mescla contas pelo nome de login: adiciona as que faltam e atualiza senhas (hash), permissões e SMTP das existentes. Não remove usuários extras nem altera compras ou O.S. Pode restaurar filiais ausentes. Se a senha do seu usuário for alterada pela restauração, faça login com a senha salva no backup.')
-        up_contas = st.file_uploader('Selecione o arquivo de contas .stangbak',type=['stangbak'],key='import_contas_encrypted')
-        senha_zip_imp = st.text_input('Senha que protege o backup .stangbak',type='password',key='chave_import')
-        if up_contas is not None and senha_zip_imp:
-            try:
-                resumo = backup_contas.visualizar_backup_contas(up_contas.getvalue(),senha_zip_imp)
-                c1,c2,c3,c4=st.columns(4)
-                c1.metric('Usuários',resumo['usuarios'])
-                c2.metric('Administradores',resumo['administradores'])
-                c3.metric('Filiais',resumo['filiais'])
-                c4.metric('Assinaturas PNG',resumo['assinaturas'])
-                st.write('Contas no arquivo: ', ', '.join(resumo['nomes']))
-                confirma_contas = st.checkbox('Confirmo que desejo atualizar os usuários existentes com os dados deste arquivo.',key='confirma_rest_contas')
-                senha_admin_imp = st.text_input('Sua senha atual de administrador (autorizar restauração)',type='password',key='admin_confirma_import')
-                if st.button('🔐 Restaurar contas do backup',disabled=not confirma_contas,type='primary'):
-                    try:
-                        r=backup_contas.restaurar_backup_contas(up_contas.getvalue(),senha_zip_imp,
-                            administrador=st.session_state.usuario,senha_admin=senha_admin_imp)
-                        st.session_state.pop('backup_contas_encrypted',None)
-                        st.success(f"Contas recuperadas: {r['adicionados']} novas, {r['atualizados']} atualizadas; "
-                                   f"{r['assinaturas']} assinaturas e {r['filiais']} filiais conferidas.")
-                        st.warning('Faça logout e entre novamente. As senhas de login podem ter sido restauradas para os valores anteriores.')
-                    except (ValueError, RuntimeError, OSError) as ex:
-                        st.error(str(ex))
-            except (ValueError, OSError, RuntimeError) as ex:
-                st.error('Não foi possível validar o backup: '+str(ex))
-        st.info('Para importar os e-mails de kkethilyn e Bruno Jerri e a assinatura de milton, clique na aba 📩 Importar perfis, ao lado desta aba.')
-    with tab_p:
-        st.caption('Importação complementar segura: não altera senhas de login, permissões nem filiais.')
-        st.markdown('### 📩 Importar complemento de perfis e assinatura')
-        st.caption('Importa apenas os e-mails de kkethilyn e Bruno Jerri e a assinatura PNG de milton. NÃO altera senhas de login, validade, permissões, administrador ou filiais. Os tokens SMTP são opcionais e digitados diretamente nesta tela.')
-        import importar_perfis_parciais as perfil_parcial
-        patch = st.file_uploader('Complemento criptografado .stangperfil',type=['stangperfil'],key='patch_perfis_v202')
-        senha_patch = st.text_input('Senha de abertura do complemento',type='password',key='pwd_patch_perfis')
-        if patch is not None and senha_patch:
-            try:
-                previa = perfil_parcial.visualizar(patch.getvalue(),senha_patch)
-                st.dataframe(pd.DataFrame(previa['emails']),hide_index=True,use_container_width=True)
-                st.info('Assinatura PNG vinculada a: milton')
-                with st.form('form_aplicar_perfis_v202'):
-                    token_k = st.text_input('Token SMTP novo de kkethilyn (opcional; vazio mantém o atual)',type='password')
-                    token_b = st.text_input('Token SMTP novo de Bruno Jerri (opcional; vazio mantém o atual)',type='password')
-                    atual_admin = st.text_input('Senha atual do administrador (obrigatória)',type='password')
-                    ok_patch = st.checkbox('Confirmei que os três usuários existem no cadastro e desejo atualizar somente estes dados.')
-                    # Formularios Streamlit enviam o estado dos widgets apenas no submit.
-                    # Nunca desabilite o submit dependendo de checkbox dentro do formulario:
-                    # isso cria um bloqueio circular e impede o envio.
-                    submit_patch = st.form_submit_button('Aplicar complemento aos perfis', type='primary')
-                    if submit_patch and not ok_patch:
-                        st.error('Marque a confirmacao de que os tres usuarios existem antes de aplicar.')
-                    elif submit_patch and not atual_admin.strip():
-                        st.error('Informe a senha atual de administrador antes de aplicar.')
-                    elif submit_patch:
-                        try:
-                            resultado=perfil_parcial.aplicar(patch.getvalue(),senha_patch,administrador=st.session_state.usuario,
-                                senha_admin=atual_admin,token_kkethilyn=token_k,token_bruno=token_b)
-                            st.success('Complemento aplicado: dois e-mails e uma assinatura vinculados. Senhas de login, permissões e filiais preservadas. Gere agora o backup de contas completo na aba 🔐 Contas e credenciais.')
-                        except (ValueError,RuntimeError,OSError) as ex:
-                            st.error('Importação não realizada: '+str(ex))
-            except (ValueError,RuntimeError,OSError) as ex:
-                st.error('Não foi possível abrir o complemento: '+str(ex))
-
-    with tab_m:
-        import migrar_usuarios_anterior
-        migrar_usuarios_anterior.renderizar()
-
-    with tab_i:
-        import mod_resgate_2026 as resgate
-        st.markdown('#### Importar registros recuperados da Intranet antiga')
-        st.info('Importação de acréscimo e conciliação: não exclui ordens, compras, FMs, anexos ou contas existentes. Não altera senhas e permissões.')
-        st.warning('Use uma janela sem novos lançamentos e faça download do backup atual antes de confirmar. Não envie documentos empresariais para o GitHub público.')
-        if not repo.modo_producao():
-            st.error('Banco externo não configurado. A importação feita no SQLite local poderá desaparecer ao reiniciar o Streamlit Cloud.')
-        up = st.file_uploader('Backup consolidado IntranetStang_Backup_Consolidado_19-10-2026.zip',type=['zip'],key='upload_resgate_2026')
-        if up:
-            conteudo = up.getvalue()
-            try:
-                preview = resgate.planejar_resgate(conteudo, filial)
-                c1,c2,c3,c4=st.columns(4)
-                c1.metric('Compras a adicionar', preview['compras_adicionadas'])
-                c2.metric('O.S. a adicionar',preview['os_adicionadas'])
-                c3.metric('FMs a adicionar',preview['fms_adicionados'])
-                c4.metric('Anexos a armazenar', preview['anexos_novos'])
-                st.write(f"Atualizações de FMs (somente se a data do backup for mais recente): **{preview['fms_renovados_mais_recentes']}**")
-                st.write(f"Vínculos de documentos a completar: **{preview['documentos_vinculados']}**")
-                if preview['pedidos_com_anexos_sem_registro_no_csv']:
-                    st.warning('Os anexos dos pedidos '+ ', '.join(preview['pedidos_com_anexos_sem_registro_no_csv'])+
-                               ' foram recuperados, mas os respectivos lançamentos não constam dos CSVs enviados. Não serão inventados cadastros.')
-                if not st.session_state.get('resgate_backup_previa') or st.session_state.get('resgate_previa_filial')!=filial:
-                    if st.button('💾 Gerar backup ANTES da importação',key='backup_antes_resgate'):
-                        st.session_state['resgate_backup_previa']=repo.backup_filial(filial,incluir_usuarios=False)
-                        st.session_state['resgate_previa_filial']=filial
-                        st.rerun()
-                if st.session_state.get('resgate_backup_previa') and st.session_state.get('resgate_previa_filial')==filial:
-                    st.download_button('📥 Baixar cópia dos dados atuais da filial',
-                        data=st.session_state['resgate_backup_previa'],file_name=f'ANTES_resgate_{filial}.zip',mime='application/zip')
-                confirmado = st.checkbox(f'Confirmo o resgate para a filial {filial}; salvei uma cópia do estado anterior.', key='confirm_resgate_2026')
-                if st.button('✅ Importar dados recuperados', key='execute_resgate_2026',type='primary',
-                             disabled=not(confirmado and st.session_state.get('resgate_backup_previa') and
-                                          st.session_state.get('resgate_previa_filial')==filial)):
-                    resultado=resgate.importar_resgate(conteudo,filial)
-                    for campo,rotulo in [('compras_adicionadas','Itens de compras'),('os_adicionadas','O.S.'),
-                                         ('fms_adicionados','FMs'),('anexos_novos','Anexos')]:
-                        st.write(f"{rotulo}: {resultado[campo]} adicionados")
-                    st.success('Conciliação concluída e gravada no banco. Confira os registros e faça um novo backup.')
-                    st.session_state['resgate_backup_previa']=None
-            except (ValueError, OSError, RuntimeError) as ex:
-                st.error(f'Não foi possível processar o resgate: {ex}')
-        st.caption('A importação pode ser repetida; registros e anexos já reconhecidos não são duplicados. A exportação visual de usuários não é usada.')
-    with tab_h:
-        itens=repo.versoes_recentes(filial)
-        if itens:st.dataframe(pd.DataFrame(itens).rename(columns={'arquivo':'Banco','versao':'Versão anterior','registrado_em':'Data'}),use_container_width=True,hide_index=True)
-        else:st.info('O histórico de versões aparecerá após as primeiras alterações.')
-    with tab_v:
-        st.markdown('**Como atualizar sem perder os dados**')
-        st.write('1. Configure DATABASE_URL uma única vez em Streamlit → Settings → Secrets.\n\n'
-                 '2. Faça um backup ZIP da filial e um backup criptografado das contas. Guarde os dois fora do servidor.\n\n'
-                 '3. Atualize o código no GitHub. O Streamlit implantará a versão nova; registros permanecem no banco externo.\n\n'
-                 '4. Reabra a aplicação e confira os registros e anexos.\n\n'
-                 '5. Não sobrescreva o banco com arquivos CSV do GitHub. Os CSVs do ZIP original são usados apenas para migração inicial.')
+                        resultado = backup_unificado.restaurar_backup(
+                            arquivo.getvalue(), senha_import, usuario=usuario,
+                            senha_admin=senha_admin_rest
+                        )
+                        st.success(f"Restauração concluída: {resultado['filiais']} filiais, "
+                                   f"{resultado['usuarios']} usuários e {resultado['documentos']} documentos de filiais.")
+                        for chave_sessao in ('backup_total_2026', 'pre_restore_total_v205', 'restore_total_previa_v205'):
+                            st.session_state.pop(chave_sessao, None)
+                        st.warning('Saia e entre novamente para revalidar senha e permissões restauradas.')
+                    except (ValueError, PermissionError, RuntimeError, OSError) as exc:
+                        st.error('Restauração cancelada; confira os dados e os logs antes de repetir. Detalhe: ' + str(exc))

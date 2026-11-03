@@ -17,6 +17,7 @@ import html as htmlmod
 import infra_persistencia as repositorio
 from seguranca_senhas import gerar_hash, verificar_senha
 import tema_stang
+from controle_acesso_filiais import filiais_permitidas, pode_gerir_todas_as_filiais
 
 # Tenta importar bibliotecas para manipulação e carimbo de PDFs
 try:
@@ -162,50 +163,31 @@ def documento_disponivel(caminho):
         return False
 
 
-# Função auxiliar para renderizar arquivos (Imagens / PDFs em Base64)
+# Visualização de documentos isolada: renderiza PDFs em imagens no servidor,
+# porque iframes/object com data:application/pdf são bloqueados em alguns navegadores.
 def exibir_documento(caminho_arquivo, titulo):
-    if pd.isna(caminho_arquivo) or str(caminho_arquivo).strip() in ["None", ""]:
-        st.warning(f"📄 **{titulo}:** Não anexado.")
-        return
-    if not documento_disponivel(caminho_arquivo):
-        st.error(f"⚠️ **{titulo}:** Arquivo não encontrado no armazenamento da filial.")
-        return
-    
-    st.markdown(f"#### 📄 {titulo}")
-    ext = os.path.splitext(str(caminho_arquivo))[1].lower()
-    
-    if ext in [".png", ".jpg", ".jpeg"]:
-        st.image(str(caminho_arquivo), caption=titulo, use_container_width=True)
-    elif ext == ".pdf":
-        with open(str(caminho_arquivo), "rb") as pdf_file:
-            pdf_bytes = pdf_file.read()
-            st.download_button(
-                label=f"📥 Baixar/Abrir {titulo} (PDF)",
-                data=pdf_bytes,
-                file_name=os.path.basename(str(caminho_arquivo)),
-                mime="application/pdf",
-                use_container_width=True
-            )
-            
-            # Renderização pesada apenas por solicitação do usuário; a montagem de
-            # PDFs em base64 para cada rerun pode gerar dezenas de MB no frontend.
-            if st.toggle(f"👁️ Pré-visualizar {titulo}", key=f"preview_doc_{titulo}_{os.path.basename(str(caminho_arquivo))}"):
-                base64_pdf = base64.b64encode(pdf_bytes).decode("ascii")
-                pdf_display = f'''
-                    <object data="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="450px">
-                        <embed src="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="450px"/>
-                        <p>Use o botão de download acima se o navegador não mostrar o PDF.</p>
-                    </object>
-                '''
-                st.markdown(pdf_display, unsafe_allow_html=True)
-    else:
-        with open(str(caminho_arquivo), "rb") as gen_file:
-            st.download_button(
-                label=f"📥 Baixar {titulo}",
-                data=gen_file.read(),
-                file_name=os.path.basename(str(caminho_arquivo)),
-                use_container_width=True
-            )
+    from visualizacao_documentos import exibir_documento as _exibir
+    atual = st.session_state.get('filial_ativa', 'MANDALLA')
+    _exibir(caminho_arquivo, titulo,
+           chave=f'{atual}_{st.session_state.get("sel_ass_id", "")}_{titulo}'.replace(' ', '_'))
+
+
+def _etapa_preenchida(valor):
+    return pd.notna(valor) and str(valor).strip().casefold() not in ('', 'none', 'nan', 'null', 'não')
+
+
+def _resumo_etapas_compra(df_pedido):
+    """Status no dropdown calculado pelos registros, sem baixar todos os PDFs."""
+    if df_pedido.empty:
+        return (0, 5)
+    colunas = ('Orcamento_Assinado', 'NF_Anexada', 'Boleto_Anexado', 'Assinado_Por')
+    etapas = [all(_etapa_preenchida(x) for x in df_pedido[c].tolist()) if c in df_pedido.columns else False
+              for c in colunas]
+    enviados = (all(str(v).strip().casefold().startswith('sim')
+                    for v in df_pedido['Email_Enviado'].tolist())
+                if 'Email_Enviado' in df_pedido.columns else False)
+    etapas.append(enviados)
+    return (sum(etapas), len(etapas))
 
 # --- FUNÇÃO PARA GERAR O PDF DA ORDEM DE SERVIÇO ---
 def gerar_pdf_os(os_row):
@@ -879,9 +861,17 @@ if not st.session_state.autenticado:
             senha_master_input = st.text_input("Insira uma senha de administrador", type="password", key="master_unlock")
             
             df_users_check_master = repositorio.ler_csv(ARQUIVO_USERS, dtype=str)
-            admins_senhas = df_users_check_master[df_users_check_master["Admin"] == "Sim"]["Senha"].tolist()
-            
-            libera_gestao = bool(senha_master_input) and any(verificar_senha(senha_master_input, s) for s in admins_senhas)
+            # Gerência GLOBAL de usuários só com a senha de um administrador
+            # autorizado no cadastro a TODAS as filiais ativas.
+            # Um administrador local não pode atribuir filiais a si mesmo
+            # (nem redefinir senhas de administradores de outras filiais).
+            filiais_do_cadastro = repositorio.listar_filiais()
+            admins_elegiveis = df_users_check_master[df_users_check_master["Admin"] == "Sim"]
+            libera_gestao = bool(senha_master_input) and any(
+                pode_gerir_todas_as_filiais(row.to_dict(), filiais_do_cadastro)
+                and verificar_senha(senha_master_input, row["Senha"])
+                for _, row in admins_elegiveis.iterrows()
+            )
             
             if libera_gestao:
                 st.success("Painel de gestão de usuários liberado:")
@@ -1063,7 +1053,7 @@ if not st.session_state.autenticado:
                                 st.success(f"Usuário '{user_selecionado}' removido!")
                                 st.rerun()
             elif senha_master_input != "":
-                st.error("Senha Master ou Administrador incorreta.")
+                st.error("Credencial inválida ou administrador sem autorização para gerenciar todas as filiais.")
                     
     st.stop()
 
@@ -1088,13 +1078,11 @@ else:
 if is_user_admin and "✍️ Painel de Assinaturas" not in menus_disponiveis:
     menus_disponiveis.append("✍️ Painel de Assinaturas")
 
-# A filial é vinculada ao usuário. Administradores podem gerenciar todas as bases.
+# A filial depende EXCLUSIVAMENTE do vínculo registrado em Configurações.
+# Administrador também não recebe acesso automático a outras bases.
 filiais_ativas = repositorio.listar_filiais()
 nomes_filiais = {item["codigo"]: item["nome"] for item in filiais_ativas}
-filiais_autorizadas = (list(nomes_filiais) if is_user_admin else [
-    x.strip() for x in str(user_logado_row.iloc[0].get("Filiais", "MANDALLA")).split(",")
-    if x.strip() in nomes_filiais
-])
+filiais_autorizadas = filiais_permitidas(user_logado_row.iloc[0].to_dict(), filiais_ativas)
 if not filiais_autorizadas:
     st.error("Seu usuário não possui uma filial ativa vinculada. Contate um administrador.")
     st.stop()
@@ -1144,9 +1132,11 @@ with st.sidebar:
         st.session_state.usuario = ""
         st.session_state.pop("filial_ativa", None)
         st.session_state.pop("backup_contas_encrypted", None)
+        st.session_state.pop("backup_total_2026", None)
+        st.session_state.pop("pre_restore_total_v205", None)
         st.rerun()
     st.info(f"🏢 {nomes_filiais[st.session_state.filial_ativa]}\nStatus: Conectado 🟢")
-    st.caption("Versão 2.0.4 — RH")
+    st.caption("Versão 2.0.5 — Backup unificado")
     
     st.markdown("<div style='text-align: left; font-style: italic; font-size: 11px; opacity: 0.7; margin-top: 25px;'><i>By: TS tech</i></div>", unsafe_allow_html=True)
 
@@ -1161,7 +1151,7 @@ if menu is not None:
         mod_rh.renderizar(st.session_state.filial_ativa, st.session_state.usuario, is_user_admin)
     elif menu == "🏢 Filiais e Backup" and is_user_admin:
         import mod_filiais_backup
-        mod_filiais_backup.renderizar(st.session_state.filial_ativa)
+        mod_filiais_backup.renderizar(st.session_state.filial_ativa, st.session_state.usuario)
     # --- TELA 1: CRIAR NOVA O.S. ---
     elif menu == "📝 Nova O.S.":
         st.markdown("# 📝 Abertura de Ordem de Serviço (O.S.)")
@@ -2283,12 +2273,27 @@ if menu is not None:
         if df_ass.empty:
             st.info("Nenhuma compra registrada para assinar.")
         else:
-            ids_ass = sorted(df_ass["ID_Compra"].unique().tolist(), reverse=True)
+            ids_ass = sorted(df_ass["ID_Compra"].dropna().astype(str).unique().tolist(),
+                             key=lambda x: (int(x) if x.isdigit() else -1, x), reverse=True)
+            resumo_opcoes = {
+                id_p: _resumo_etapas_compra(df_ass[df_ass["ID_Compra"].astype(str) == id_p])
+                for id_p in ids_ass
+            }
+            def exibir_pedido_opcao(id_p):
+                feitos, total = resumo_opcoes[id_p]
+                return (f'{id_p} — ✅ OK | Enviado ({total}/{total})'
+                        if feitos == total else f'{id_p} — ⏳ Pendente ({feitos}/{total})')
 
             col_sel1, col_sel2 = st.columns([2.5, 1])
 
             with col_sel1:
-                id_sel_ass = st.selectbox("Selecione o Número do Pedido (Orçamento):", ids_ass, key="sel_ass_id")
+                id_sel_ass = st.selectbox("Selecione o Número do Pedido (Orçamento):", ids_ass,
+                                          key="sel_ass_id", format_func=exibir_pedido_opcao)
+                feitas, total_etapas = resumo_opcoes[id_sel_ass]
+                if feitas == total_etapas:
+                    st.caption('✅ Cinco etapas confirmadas no cadastro: orçamento, NF, boleto, assinatura e e-mail.')
+                else:
+                    st.caption(f'⏳ {feitas} de {total_etapas} etapas confirmadas. Os documentos serão conferidos ao abrir o pedido.')
                 rows_ass = df_ass[df_ass["ID_Compra"] == str(id_sel_ass)]
                 row_base_ass = rows_ass.iloc[0]
 
