@@ -132,24 +132,43 @@ def inicializar_bancos():
             repositorio.salvar_csv(df_users, ARQUIVO_USERS)
 
 
-inicializar_bancos()
-repositorio.importar_anexos_legados()
+# As migrações são verificadas uma vez por sessão, não a cada clique.
+# Não utilizar cache global para registros operacionais (vários usuários/filiais).
+if not st.session_state.get("_intranet_bancos_inicializados_20261103", False):
+    inicializar_bancos()
+    repositorio.importar_anexos_legados()
+    st.session_state["_intranet_bancos_inicializados_20261103"] = True
 
 def carregar_banco_os():
-    if not os.path.exists(ARQUIVO_OS):
-        inicializar_bancos()
+    # No Supabase, os arquivos CSV não precisam existir no disco local.
     df = repositorio.ler_csv(ARQUIVO_OS, dtype=str)
     if "ID" in df.columns:
         df["ID"] = pd.to_numeric(df["ID"], errors="coerce").fillna(0).astype(int)
     return df
+
+# Recuperação sob demanda: mantém no Supabase os anexos que não estão no cache
+# local do Streamlit. Evita transferir toda a biblioteca a cada clique.
+def documento_disponivel(caminho):
+    if caminho is None or pd.isna(caminho):
+        return False
+    caminho = str(caminho).strip()
+    if not caminho or caminho.lower() in ("none", "nan"):
+        return False
+    if os.path.exists(caminho):
+        return True
+    try:
+        return bool(repositorio.recuperar_documento(caminho))
+    except (OSError, ValueError, TypeError):
+        return False
+
 
 # Função auxiliar para renderizar arquivos (Imagens / PDFs em Base64)
 def exibir_documento(caminho_arquivo, titulo):
     if pd.isna(caminho_arquivo) or str(caminho_arquivo).strip() in ["None", ""]:
         st.warning(f"📄 **{titulo}:** Não anexado.")
         return
-    if not os.path.exists(str(caminho_arquivo)):
-        st.error(f"⚠️ **{titulo}:** Arquivo não encontrado no servidor.")
+    if not documento_disponivel(caminho_arquivo):
+        st.error(f"⚠️ **{titulo}:** Arquivo não encontrado no armazenamento da filial.")
         return
     
     st.markdown(f"#### 📄 {titulo}")
@@ -160,8 +179,6 @@ def exibir_documento(caminho_arquivo, titulo):
     elif ext == ".pdf":
         with open(str(caminho_arquivo), "rb") as pdf_file:
             pdf_bytes = pdf_file.read()
-            base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-            
             st.download_button(
                 label=f"📥 Baixar/Abrir {titulo} (PDF)",
                 data=pdf_bytes,
@@ -170,13 +187,17 @@ def exibir_documento(caminho_arquivo, titulo):
                 use_container_width=True
             )
             
-            pdf_display = f'''
-                <object data="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="450px">
-                    <embed src="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="450px"/>
-                    <p style="font-size: 12px; color: #666;">Se o seu navegador não exibir o PDF acima automaticamente, <a href="data:application/pdf;base64,{base64_pdf}" download="{os.path.basename(str(caminho_arquivo))}">clique aqui para baixar diretamente</a>.</p>
-                </object>
-            '''
-            st.markdown(pdf_display, unsafe_allow_html=True)
+            # Renderização pesada apenas por solicitação do usuário; a montagem de
+            # PDFs em base64 para cada rerun pode gerar dezenas de MB no frontend.
+            if st.toggle(f"👁️ Pré-visualizar {titulo}", key=f"preview_doc_{titulo}_{os.path.basename(str(caminho_arquivo))}"):
+                base64_pdf = base64.b64encode(pdf_bytes).decode("ascii")
+                pdf_display = f'''
+                    <object data="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="450px">
+                        <embed src="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="450px"/>
+                        <p>Use o botão de download acima se o navegador não mostrar o PDF.</p>
+                    </object>
+                '''
+                st.markdown(pdf_display, unsafe_allow_html=True)
     else:
         with open(str(caminho_arquivo), "rb") as gen_file:
             st.download_button(
@@ -684,7 +705,7 @@ def gerar_html_os_impressao(os_row):
 
 # --- FUNÇÃO PARA APLICAR A ASSINATURA DIGITAL NO FINAL DO DOCUMENTO ---
 def carimbar_assinatura_no_documento(caminho_doc, caminho_assinatura_png, nome_usuario):
-    if not os.path.exists(caminho_doc) or not os.path.exists(caminho_assinatura_png):
+    if not documento_disponivel(caminho_doc) or not documento_disponivel(caminho_assinatura_png):
         return False
     
     ext = os.path.splitext(caminho_doc)[1].lower()
@@ -778,18 +799,18 @@ def enviar_email_real(destinatario, assunto, corpo, anexos, config):
         for file_item in anexos:
             if isinstance(file_item, tuple):
                 file_bytes, filename = file_item
-                part = MIMEBase("application", "octet-stream")
+                part = MIMEBase("application", "pdf" if str(filename).lower().endswith(".pdf") else "octet-stream")
                 part.set_payload(file_bytes)
                 encoders.encode_base64(part)
-                part.add_header("Content-Disposition", f"attachment; filename= {filename}")
+                part.add_header("Content-Disposition", "attachment", filename=os.path.basename(str(filename)) or "documento.pdf")
                 msg.attach(part)
-            elif file_item and str(file_item) != "None" and os.path.exists(str(file_item)):
+            elif file_item and documento_disponivel(file_item):
                 with open(file_item, "rb") as attachment:
-                    part = MIMEBase("application", "octet-stream")
+                    part = MIMEBase("application", "pdf" if str(file_item).lower().endswith(".pdf") else "octet-stream")
                     part.set_payload(attachment.read())
                 encoders.encode_base64(part)
                 filename = os.path.basename(file_item)
-                part.add_header("Content-Disposition", f"attachment; filename= {filename}")
+                part.add_header("Content-Disposition", "attachment", filename=filename or "documento.pdf")
                 msg.attach(part)
                 
         server = smtplib.SMTP(servidor_smtp, porta_smtp)
@@ -990,7 +1011,7 @@ if not st.session_state.autenticado:
                             st.markdown("---")
                             st.markdown("✍️ **Assinatura Digital em PNG:**")
                             path_ass_atual = str(row_u_edit.get("Assinatura_PNG", "None"))
-                            if path_ass_atual != "None" and os.path.exists(path_ass_atual):
+                            if path_ass_atual != "None" and documento_disponivel(path_ass_atual):
                                 st.image(path_ass_atual, caption=f"Assinatura Atual de {user_selecionado}", width=200)
                             else:
                                 st.caption("Nenhuma assinatura digital cadastrada.")
@@ -1130,7 +1151,8 @@ with st.sidebar:
     st.markdown("<div style='text-align: left; font-style: italic; font-size: 11px; opacity: 0.7; margin-top: 25px;'><i>By: TS tech</i></div>", unsafe_allow_html=True)
 
 if menu is not None:
-    repositorio.sincronizar_documentos()
+    # Os anexos permanecem no Supabase, mas só são recuperados ao serem usados.
+    # A sincronização de TODOS os arquivos em cada interação deixava a aplicação lenta.
     if menu == "🧰 Ferramentaria":
         import mod_ferramentaria
         mod_ferramentaria.renderizar(st.session_state.filial_ativa, st.session_state.usuario, is_user_admin)
@@ -1931,7 +1953,7 @@ if menu is not None:
                         if not row_atual_anexo.empty:
                             path_atual = row_atual_anexo.iloc[0].get("Orcamento_Assinado", "None")
                         
-                        tem_anexo = pd.notna(path_atual) and str(path_atual).strip() != "None" and str(path_atual).strip() != "" and os.path.exists(str(path_atual))
+                        tem_anexo = pd.notna(path_atual) and str(path_atual).strip() != "None" and str(path_atual).strip() != "" and documento_disponivel(str(path_atual))
                         
                         with st.form("form_anexar_orcamento", clear_on_submit=False):
                             arquivo_anexo = st.file_uploader("Documento (PDF/Img)", type=["pdf", "png", "jpg", "jpeg"])
@@ -1949,7 +1971,7 @@ if menu is not None:
                                 acao_realizada = False
                                 if excluir_atual and tem_anexo:
                                     try:
-                                        if os.path.exists(str(path_atual)):
+                                        if documento_disponivel(str(path_atual)):
                                             repositorio.remover_documento(str(path_atual))
                                     except:
                                         pass
@@ -1959,7 +1981,7 @@ if menu is not None:
                                 if arquivo_anexo is not None:
                                     if tem_anexo and not excluir_atual:
                                         try:
-                                            if os.path.exists(str(path_atual)):
+                                            if documento_disponivel(str(path_atual)):
                                                 repositorio.remover_documento(str(path_atual))
                                         except:
                                             pass
@@ -1983,7 +2005,7 @@ if menu is not None:
                             if btn_remover_apenas:
                                 if tem_anexo:
                                     try:
-                                        if os.path.exists(str(path_atual)):
+                                        if documento_disponivel(str(path_atual)):
                                             repositorio.remover_documento(str(path_atual))
                                     except:
                                         pass
@@ -2155,7 +2177,7 @@ if menu is not None:
                 with col_print2:
                     st.markdown("<br>", unsafe_allow_html=True)
                     anexo_path = row_c_base.get("Orcamento_Assinado", "None")
-                    if pd.notna(anexo_path) and str(anexo_path).strip() != "None" and str(anexo_path).strip() != "" and os.path.exists(str(anexo_path)):
+                    if pd.notna(anexo_path) and str(anexo_path).strip() != "None" and str(anexo_path).strip() != "" and documento_disponivel(str(anexo_path)):
                         with open(anexo_path, "rb") as file:
                             st.download_button(
                                 label="📥 Baixar Orçamento Anexado",
@@ -2275,7 +2297,7 @@ if menu is not None:
             ass_png_path = "None"
             if not row_u_logged.empty:
                 ass_png_path = str(row_u_logged.iloc[0].get("Assinatura_PNG", "None"))
-            tem_assinatura_png = (ass_png_path != "None" and os.path.exists(ass_png_path))
+            tem_assinatura_png = (ass_png_path != "None" and documento_disponivel(ass_png_path))
 
             with col_sel2:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -2289,7 +2311,7 @@ if menu is not None:
 
                     assinaram_algo = False
                     for doc in documentos_para_assinar:
-                        if doc != "None" and os.path.exists(doc):
+                        if doc != "None" and documento_disponivel(doc):
                             res = carimbar_assinatura_no_documento(doc, ass_png_path, st.session_state.usuario)
                             if res:
                                 assinaram_algo = True
@@ -2308,9 +2330,9 @@ if menu is not None:
             p_ass = row_base_ass.get("Assinado_Por", "None")
             p_email = row_base_ass.get("Email_Enviado", "Não")
 
-            has_orc = pd.notna(p_orc) and str(p_orc).strip() != "None" and os.path.exists(str(p_orc))
-            has_nf = pd.notna(p_nf) and str(p_nf).strip() != "None" and os.path.exists(str(p_nf))
-            has_bol = pd.notna(p_bol) and str(p_bol).strip() != "None" and os.path.exists(str(p_bol))
+            has_orc = pd.notna(p_orc) and str(p_orc).strip() != "None" and documento_disponivel(str(p_orc))
+            has_nf = pd.notna(p_nf) and str(p_nf).strip() != "None" and documento_disponivel(str(p_nf))
+            has_bol = pd.notna(p_bol) and str(p_bol).strip() != "None" and documento_disponivel(str(p_bol))
             has_signature = pd.notna(p_ass) and str(p_ass).strip() != "None" and str(p_ass).strip() != ""
             has_email = str(p_email).strip().lower().startswith("sim")
 
@@ -2427,6 +2449,15 @@ if menu is not None:
                                     str(row_base_ass.get("NF_Anexada", "None")),
                                     str(row_base_ass.get("Boleto_Anexado", "None"))
                                 ]
+
+                                anexos_referenciados = [a for a in anexos_envio if a and a.strip().lower() not in ("none", "nan")]
+                                anexos_faltantes = [a for a in anexos_referenciados if not documento_disponivel(a)]
+                                if anexos_faltantes:
+                                    st.error("Um ou mais documentos vinculados não puderam ser recuperados. O e-mail NÃO foi enviado.")
+                                    st.stop()
+                                if not anexos_referenciados:
+                                    st.error("Não há documentos anexados a este pedido. O e-mail NÃO foi enviado.")
+                                    st.stop()
 
                                 corpo_dinamico = f"Documentação referente ao Pedido de Compra #{id_sel_ass}.\n\nObservações: {obs_email}" if obs_email else f"Documentação referente ao Pedido de Compra #{id_sel_ass}."
 
