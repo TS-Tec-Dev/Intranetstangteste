@@ -1,8 +1,11 @@
 import streamlit as st
+_INTRANET_INICIO_EXECUCAO = perf_counter()
 import streamlit.components.v1 as components
 import pandas as pd
 import os
 from datetime import datetime, timedelta
+from functools import lru_cache
+from time import perf_counter
 import plotly.express as px
 import plotly.graph_objects as go
 from PIL import Image
@@ -135,10 +138,18 @@ def inicializar_bancos():
 
 # As migrações são verificadas uma vez por sessão, não a cada clique.
 # Não utilizar cache global para registros operacionais (vários usuários/filiais).
+@lru_cache(maxsize=2)
+def _anexos_legados_migrados(url_banco):
+    # A própria função verifica no PostgreSQL a migração concluída.
+    # Depois da primeira verificação por processo não precisa consultar outra vez.
+    return repositorio.importar_anexos_legados()
+
+_INTRANET_INICIO_BANCO = perf_counter()
 if not st.session_state.get("_intranet_bancos_inicializados_20261103", False):
     inicializar_bancos()
-    repositorio.importar_anexos_legados()
+    _anexos_legados_migrados(repositorio.config_database_url())
     st.session_state["_intranet_bancos_inicializados_20261103"] = True
+_INTRANET_TEMPO_INICIALIZACAO = perf_counter() - _INTRANET_INICIO_BANCO
 
 def carregar_banco_os():
     # No Supabase, os arquivos CSV não precisam existir no disco local.
@@ -693,49 +704,74 @@ def carimbar_assinatura_no_documento(caminho_doc, caminho_assinatura_png, nome_u
     ext = os.path.splitext(caminho_doc)[1].lower()
     
     if ext == ".pdf" and HAS_PDF_LIBS:
+        temp_path = None
         try:
+            # pypdf >= 7: a pagina precisa pertencer ao PdfWriter ANTES do merge.
+            # O carimbo e apenas visual: nao representa assinatura digital ICP-Brasil.
             reader = PdfReader(caminho_doc)
+            if not reader.pages:
+                raise ValueError("O PDF nao possui paginas para receber o carimbo.")
+
             writer = PdfWriter()
-            num_pages = len(reader.pages)
-            
-            ultima_pagina = reader.pages[-1]
+            writer.append(reader)  # clona as paginas preservando a ordem
+            ultima_pagina = writer.pages[-1]  # pagina VINCULADA ao writer
+
+            # Ajusta documentos com orientacao por rotacao antes de desenhar o carimbo.
+            if ultima_pagina.rotation:
+                ultima_pagina.transfer_rotation_to_content()
             largura = float(ultima_pagina.mediabox.width)
             altura = float(ultima_pagina.mediabox.height)
-            
+
             packet = io.BytesIO()
             can = canvas.Canvas(packet, pagesize=(largura, altura))
-            
-            width_img = 160
-            height_img = 60
-            x = largura - width_img - 40
+            width_img, height_img = 160, 60
+            x = max(10, largura - width_img - 40)
             y = 40
-            
-            can.drawImage(caminho_assinatura_png, x, y, width=width_img, height=height_img, mask='auto', preserveAspectRatio=True)
+            can.drawImage(
+                caminho_assinatura_png, x, y,
+                width=width_img, height=height_img,
+                mask="auto", preserveAspectRatio=True,
+            )
             can.setFont("Helvetica-Bold", 8)
-            can.drawString(x, y - 10, f"Assinado digitalmente por: {nome_usuario}")
+            can.drawString(x, y - 10, f"Assinado por: {nome_usuario}")
             can.drawString(x, y - 20, f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
             can.save()
-            
+
             packet.seek(0)
             overlay_pdf = PdfReader(packet)
-            overlay_page = overlay_pdf.pages[0]
-            
-            for i, page in enumerate(reader.pages):
-                if i == num_pages - 1:
-                    page.merge_page(overlay_page)
-                writer.add_page(page)
-                
-            temp_path = caminho_doc + ".signed.pdf"
-            with open(temp_path, "wb") as f_out:
+            # A mesclagem modifica somente a pagina clonada no writer.
+            ultima_pagina.merge_page(overlay_pdf.pages[0], over=True)
+
+            # Grava em um arquivo unico temporario, no mesmo diretorio, sem
+            # sobrescrever o original se houver falha no carimbo ou na gravacao.
+            import tempfile
+            pasta = os.path.dirname(os.path.abspath(caminho_doc))
+            fd, temp_path = tempfile.mkstemp(
+                prefix=".carimbo_stang_", suffix=".pdf", dir=pasta
+            )
+            with os.fdopen(fd, "wb") as f_out:
                 writer.write(f_out)
-                
+
+            with open(temp_path, "rb") as f_teste:
+                saida = PdfReader(f_teste)
+                if len(saida.pages) != len(reader.pages):
+                    raise ValueError("O PDF carimbado ficou com numero incorreto de paginas.")
+
+            # So substitui o original apos gravar e validar o PDF de saida.
             os.replace(temp_path, caminho_doc)
+            temp_path = None
             repositorio.registrar_documento(caminho_doc)
             return True
         except Exception as e:
             st.error(f"Erro ao aplicar carimbo no PDF: {e}")
             return False
-            
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+
     elif ext in [".png", ".jpg", ".jpeg"]:
         try:
             doc_img = Image.open(caminho_doc).convert("RGBA")
@@ -2302,12 +2338,24 @@ if menu is not None:
             ass_png_path = "None"
             if not row_u_logged.empty:
                 ass_png_path = str(row_u_logged.iloc[0].get("Assinatura_PNG", "None"))
-            tem_assinatura_png = (ass_png_path != "None" and documento_disponivel(ass_png_path))
+            # Verificação leve, sem baixar a assinatura em todos os cliques.
+            caminhos_pedido = [
+                str(row_base_ass.get("Orcamento_Assinado", "None")),
+                str(row_base_ass.get("NF_Anexada", "None")),
+                str(row_base_ass.get("Boleto_Anexado", "None")),
+                ass_png_path,
+            ]
+            existencia_docs = repositorio.documentos_existentes(caminhos_pedido)
+            tem_assinatura_png = bool(existencia_docs.get(ass_png_path, False))
 
             with col_sel2:
                 st.markdown("<br>", unsafe_allow_html=True)
                 btn_assinar_agora = st.button("✍️ Assinar Doc", disabled=not tem_assinatura_png, use_container_width=True)
                 if btn_assinar_agora:
+                    # A assinatura será transferida somente durante a operação real.
+                    if not documento_disponivel(ass_png_path):
+                        st.error("Assinatura PNG indisponível. Recarregue e tente novamente.")
+                        st.stop()
                     documentos_para_assinar = [
                         str(row_base_ass.get("Orcamento_Assinado", "None")),
                         str(row_base_ass.get("NF_Anexada", "None")),
@@ -2335,9 +2383,10 @@ if menu is not None:
             p_ass = row_base_ass.get("Assinado_Por", "None")
             p_email = row_base_ass.get("Email_Enviado", "Não")
 
-            has_orc = pd.notna(p_orc) and str(p_orc).strip() != "None" and documento_disponivel(str(p_orc))
-            has_nf = pd.notna(p_nf) and str(p_nf).strip() != "None" and documento_disponivel(str(p_nf))
-            has_bol = pd.notna(p_bol) and str(p_bol).strip() != "None" and documento_disponivel(str(p_bol))
+            # Metadados em uma consulta, sem transferir conteúdo de até três arquivos.
+            has_orc = bool(existencia_docs.get(str(p_orc), False))
+            has_nf = bool(existencia_docs.get(str(p_nf), False))
+            has_bol = bool(existencia_docs.get(str(p_bol), False))
             has_signature = pd.notna(p_ass) and str(p_ass).strip() != "None" and str(p_ass).strip() != ""
             has_email = str(p_email).strip().lower().startswith("sim")
 
@@ -2814,3 +2863,13 @@ if menu is not None:
             "Os filtros de Dia, Mês e Ano acima são globais para as duas janelas do Dashboard. "
             "As áreas de Solicitações de Compras, Painel de Assinaturas e demais painéis existentes não foram alteradas."
         )
+
+
+# Instrumentação local, sem SQL/segredos: compara execução no servidor com a
+# espera do navegador. É uma referência, não mede o tempo de rede/front-end.
+if st.session_state.get("autenticado", False) and bool(globals().get("is_user_admin", False)):
+    with st.sidebar.expander("⏱️ Diagnóstico de carregamento", expanded=False):
+        tempo_total = perf_counter() - _INTRANET_INICIO_EXECUCAO
+        st.caption(f"Execução Python: {tempo_total:.2f} s")
+        st.caption(f"Inicialização de bancos/migrações: {_INTRANET_TEMPO_INICIALIZACAO:.2f} s")
+        st.caption("Não inclui espera de rede ou renderização do navegador.")

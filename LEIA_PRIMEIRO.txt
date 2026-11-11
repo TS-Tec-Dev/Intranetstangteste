@@ -1,0 +1,27 @@
+INTRANET STANG - HOTFIX ASSINATURA pypdf 7 (v2.0.5.3)
+================================================
+SINTOMA: "PageObject.replace_contents() ... has been removed in pypdf 7.0.0"
+CAUSA: o codigo anterior faz merge_page() diretamente em uma pagina PdfReader
+antes de coloca-la em PdfWriter.
+
+ARQUIVO PARA O GITHUB: Intranet.py
+- Substitui SOMENTE a funcao carimbar_assinatura_no_documento() na base
+  IntranetStang v2.0.5.2 enviada anteriormente.
+- Se o seu Intranet.py no GitHub ja tem outras alteracoes posteriores,
+  NAO substitua o arquivo todo. Use SOMENTE_FUNCAO_CORRIGIDA.txt para
+  trocar apenas essa funcao, mantendo os modulos de seu codigo atual.
+- Nao altere SQL, Supabase, Secrets, usuarios ou PDFs existentes.
+- Realize teste no repositorio de homologacao antes de atualizar a app oficial.
+
+PASSOS:
+1. Faca backup geral da Intranet e contas, se possivel.
+2. Baixe e extraia o ZIP; compare o arquivo Intranet.py no GitHub.
+3. Na base v2.0.5.2 sem mudancas, envie apenas Intranet.py.
+4. Se a base foi modificada depois, substitua SOMENTE a funcao
+   carimbar_assinatura_no_documento() com SOMENTE_FUNCAO_CORRIGIDA.txt.
+5. Commit Changes; Streamlit Cloud: Manage app > Reboot app.
+6. Teste primeiro a assinatura de uma COPIA de um PDF.
+7. Verifique imagem/carimbo, numero de paginas, download e persistencia.
+
+NOTA: O 'carimbo' e uma marca visual. Nao constitui, por si, uma assinatura
+criptografica/digital certificada. A funcao deve ser testada com documentos reais.

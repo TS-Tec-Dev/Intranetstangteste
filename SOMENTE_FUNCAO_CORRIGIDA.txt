@@ -1,0 +1,98 @@
+def carimbar_assinatura_no_documento(caminho_doc, caminho_assinatura_png, nome_usuario):
+    if not documento_disponivel(caminho_doc) or not documento_disponivel(caminho_assinatura_png):
+        return False
+    
+    ext = os.path.splitext(caminho_doc)[1].lower()
+    
+    if ext == ".pdf" and HAS_PDF_LIBS:
+        temp_path = None
+        try:
+            # pypdf >= 7: a pagina precisa pertencer ao PdfWriter ANTES do merge.
+            # O carimbo e apenas visual: nao representa assinatura digital ICP-Brasil.
+            reader = PdfReader(caminho_doc)
+            if not reader.pages:
+                raise ValueError("O PDF nao possui paginas para receber o carimbo.")
+
+            writer = PdfWriter()
+            writer.append(reader)  # clona as paginas preservando a ordem
+            ultima_pagina = writer.pages[-1]  # pagina VINCULADA ao writer
+
+            # Ajusta documentos com orientacao por rotacao antes de desenhar o carimbo.
+            if ultima_pagina.rotation:
+                ultima_pagina.transfer_rotation_to_content()
+            largura = float(ultima_pagina.mediabox.width)
+            altura = float(ultima_pagina.mediabox.height)
+
+            packet = io.BytesIO()
+            can = canvas.Canvas(packet, pagesize=(largura, altura))
+            width_img, height_img = 160, 60
+            x = max(10, largura - width_img - 40)
+            y = 40
+            can.drawImage(
+                caminho_assinatura_png, x, y,
+                width=width_img, height=height_img,
+                mask="auto", preserveAspectRatio=True,
+            )
+            can.setFont("Helvetica-Bold", 8)
+            can.drawString(x, y - 10, f"Assinado por: {nome_usuario}")
+            can.drawString(x, y - 20, f"Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+            can.save()
+
+            packet.seek(0)
+            overlay_pdf = PdfReader(packet)
+            # A mesclagem modifica somente a pagina clonada no writer.
+            ultima_pagina.merge_page(overlay_pdf.pages[0], over=True)
+
+            # Grava em um arquivo unico temporario, no mesmo diretorio, sem
+            # sobrescrever o original se houver falha no carimbo ou na gravacao.
+            import tempfile
+            pasta = os.path.dirname(os.path.abspath(caminho_doc))
+            fd, temp_path = tempfile.mkstemp(
+                prefix=".carimbo_stang_", suffix=".pdf", dir=pasta
+            )
+            with os.fdopen(fd, "wb") as f_out:
+                writer.write(f_out)
+
+            with open(temp_path, "rb") as f_teste:
+                saida = PdfReader(f_teste)
+                if len(saida.pages) != len(reader.pages):
+                    raise ValueError("O PDF carimbado ficou com numero incorreto de paginas.")
+
+            # So substitui o original apos gravar e validar o PDF de saida.
+            os.replace(temp_path, caminho_doc)
+            temp_path = None
+            repositorio.registrar_documento(caminho_doc)
+            return True
+        except Exception as e:
+            st.error(f"Erro ao aplicar carimbo no PDF: {e}")
+            return False
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+
+    elif ext in [".png", ".jpg", ".jpeg"]:
+        try:
+            doc_img = Image.open(caminho_doc).convert("RGBA")
+            ass_img = Image.open(caminho_assinatura_png).convert("RGBA")
+            
+            ass_width = int(doc_img.width * 0.25)
+            w_percent = (ass_width / float(ass_img.width))
+            ass_height = int((float(ass_img.height) * float(w_percent)))
+            ass_img = ass_img.resize((ass_width, ass_height), Image.Resampling.LANCZOS)
+            
+            pos_x = doc_img.width - ass_width - 20
+            pos_y = doc_img.height - ass_height - 20
+            
+            doc_img.paste(ass_img, (pos_x, pos_y), ass_img)
+            doc_img.convert("RGB").save(caminho_doc)
+            repositorio.registrar_documento(caminho_doc)
+            return True
+        except Exception as e:
+            st.error(f"Erro ao aplicar carimbo na Imagem: {e}")
+            return False
+            
+    return True
+
