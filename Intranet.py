@@ -1,11 +1,12 @@
 import streamlit as st
+from time import perf_counter
+
 _INTRANET_INICIO_EXECUCAO = perf_counter()
 import streamlit.components.v1 as components
 import pandas as pd
 import os
 from datetime import datetime, timedelta
 from functools import lru_cache
-from time import perf_counter
 import plotly.express as px
 import plotly.graph_objects as go
 from PIL import Image

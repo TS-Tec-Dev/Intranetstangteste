@@ -1,27 +1,12 @@
-INTRANET STANG - HOTFIX ASSINATURA pypdf 7 (v2.0.5.3)
-================================================
-SINTOMA: "PageObject.replace_contents() ... has been removed in pypdf 7.0.0"
-CAUSA: o codigo anterior faz merge_page() diretamente em uma pagina PdfReader
-antes de coloca-la em PdfWriter.
+# Correção NameError de perf_counter — Intranet v2.0.5.3
 
-ARQUIVO PARA O GITHUB: Intranet.py
-- Substitui SOMENTE a funcao carimbar_assinatura_no_documento() na base
-  IntranetStang v2.0.5.2 enviada anteriormente.
-- Se o seu Intranet.py no GitHub ja tem outras alteracoes posteriores,
-  NAO substitua o arquivo todo. Use SOMENTE_FUNCAO_CORRIGIDA.txt para
-  trocar apenas essa funcao, mantendo os modulos de seu codigo atual.
-- Nao altere SQL, Supabase, Secrets, usuarios ou PDFs existentes.
-- Realize teste no repositorio de homologacao antes de atualizar a app oficial.
+Erro: NameError: name 'perf_counter' is not defined, Intranet.py linha 2.
+Causa: a medição do tempo começava antes de importar perf_counter.
 
-PASSOS:
-1. Faca backup geral da Intranet e contas, se possivel.
-2. Baixe e extraia o ZIP; compare o arquivo Intranet.py no GitHub.
-3. Na base v2.0.5.2 sem mudancas, envie apenas Intranet.py.
-4. Se a base foi modificada depois, substitua SOMENTE a funcao
-   carimbar_assinatura_no_documento() com SOMENTE_FUNCAO_CORRIGIDA.txt.
-5. Commit Changes; Streamlit Cloud: Manage app > Reboot app.
-6. Teste primeiro a assinatura de uma COPIA de um PDF.
-7. Verifique imagem/carimbo, numero de paginas, download e persistencia.
+Instalação:
+1. Antes de substituir, faça uma cópia do seu Intranet.py atual do GitHub.
+2. Se a versão que está executando é a v2.0.5.3 entregue anteriormente, substitua o Intranet.py pelo deste ZIP.
+3. Faça o commit e reinicie/recarregue o Streamlit.
+4. Se houve outras alterações no seu Intranet.py após a v2.0.5.3, não sobrescreva o arquivo completo: apenas adicione `from time import perf_counter` imediatamente acima de `_INTRANET_INICIO_EXECUCAO = perf_counter()`.
 
-NOTA: O 'carimbo' e uma marca visual. Nao constitui, por si, uma assinatura
-criptografica/digital certificada. A funcao deve ser testada com documentos reais.
+Este hotfix altera somente a ordem da importação de perf_counter. Não modifique Secrets, DATABASE_URL ou tabelas.
