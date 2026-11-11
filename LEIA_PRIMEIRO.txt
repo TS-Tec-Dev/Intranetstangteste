@@ -1,12 +1,20 @@
-# Correção NameError de perf_counter — Intranet v2.0.5.3
+INTRANET STANG — HOTFIX AttributeError "documentos_existentes" (11/11/2026)
 
-Erro: NameError: name 'perf_counter' is not defined, Intranet.py linha 2.
-Causa: a medição do tempo começava antes de importar perf_counter.
+CAUSA
+O Intranet.py recente consulta repositorio.documentos_existentes(caminhos_pedido), mas o infra_persistencia.py da v2.0.5 nao define essa funcao. A funcao foi incluida na v2.0.5.2.
 
-Instalação:
-1. Antes de substituir, faça uma cópia do seu Intranet.py atual do GitHub.
-2. Se a versão que está executando é a v2.0.5.3 entregue anteriormente, substitua o Intranet.py pelo deste ZIP.
-3. Faça o commit e reinicie/recarregue o Streamlit.
-4. Se houve outras alterações no seu Intranet.py após a v2.0.5.3, não sobrescreva o arquivo completo: apenas adicione `from time import perf_counter` imediatamente acima de `_INTRANET_INICIO_EXECUCAO = perf_counter()`.
+INSTALACAO NA BRANCH DE TESTE
+1. Antes da troca, salve uma copia do infra_persistencia.py atual do GitHub.
+2. Confira se o arquivo atual ainda eh da familia v2.0.5/2.0.5.2. Caso tenha alteracoes posteriores personalizadas, compare os arquivos em vez de substituir tudo.
+3. No repositorio Intranetstangteste, no GitHub, abra a branch utilizada pelo Streamlit.
+4. Add file > Upload files: envie APENAS infra_persistencia.py deste ZIP para a raiz, substituindo o atual.
+5. Commit changes; no GitHub abra infra_persistencia.py e procure por "def documentos_existentes(caminhos):".
+6. Em Streamlit Community Cloud: Manage app > Reboot app e recarregue a pagina.
+7. Teste Painel de Assinaturas > pedido 552: visualizacao de estados e carimbo.
 
-Este hotfix altera somente a ordem da importação de perf_counter. Não modifique Secrets, DATABASE_URL ou tabelas.
+IMPORTANTE
+- NAO envie este arquivo ao Supabase, nao altere DATABASE_URL nem importe backups para corrigir esse erro.
+- Nao ha scripts de exclusao ou migracao destrutiva de dados neste pacote.
+- O modulo foi extraido da atualizacao v2.0.5.2 ja fornecida anteriormente.
+- O teste local verifica a consulta de existencia sem transferir os blobs. A verificacao em producao depende da sua implantacao.
+- Se receber outro erro, envie captura incluindo a linha do Intranet.py e do modulo.

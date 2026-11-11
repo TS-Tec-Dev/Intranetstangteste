@@ -363,6 +363,50 @@ def registrar_documento(caminho, conteudo=None):
     return caminho
 
 
+
+def documentos_existentes(caminhos):
+    """Verifica até 25 anexos por metadados, SEM transferir PDFs/imagens.
+
+    Não altera bytes, permissões, revisões ou vínculo por filial. Cada escopo
+    é consultado separadamente (filial atual ou assinaturas globais).
+    Retorna um dicionário {caminho: bool}. A leitura completa ocorre somente
+    quando o documento é aberto, baixado ou utilizado para assinar/enviar.
+    """
+    resultado = {}
+    pendentes = {}
+    for valor in list(caminhos)[:25]:
+        if valor is None:
+            continue
+        texto = str(valor).strip()
+        if texto.casefold() in ("", "none", "nan", "null"):
+            continue
+        try:
+            caminho = _doc_valid(texto)
+        except (TypeError, ValueError):
+            resultado[texto] = False
+            continue
+        scope = _doc_scope(caminho)
+        # Cache local é confiável apenas se estiver na filial correta.
+        local_filial = f".runtime_data/cache/{scope}/"
+        local_legado = (scope == DEFAULT_FILIAL and not caminho.startswith('.runtime_data/cache/'))
+        if Path(caminho).is_file() and (local_legado or caminho.startswith(local_filial) or scope == GLOBAL):
+            resultado[texto] = True
+        else:
+            resultado[texto] = False
+            pendentes.setdefault(scope, set()).add(caminho)
+    if pendentes:
+        with engine().connect() as conn:
+            for scope, nomes in pendentes.items():
+                encontrados = conn.execute(
+                    select(docs_tb.c.caminho).where(
+                        (docs_tb.c.filial == scope) & docs_tb.c.caminho.in_(nomes)
+                    )
+                ).scalars().all()
+                for caminho in encontrados:
+                    resultado[caminho] = True
+    return resultado
+
+
 def recuperar_documento(caminho):
     try:
         caminho = _doc_valid(caminho)
