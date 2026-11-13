@@ -33,6 +33,44 @@ import html as htmlmod
 import infra_persistencia as repositorio
 from seguranca_senhas import gerar_hash, verificar_senha
 import tema_stang
+try:
+    import quadros_modernos as quadros
+except ImportError:
+    # Falha segura: se o arquivo visual não estiver publicado, a Intranet continua
+    # funcionando com os quadros nativos, sem afetar registros nem permissões.
+    class _QuadrosFallback:
+        @staticmethod
+        def aplicar_estilo():
+            pass
+        @staticmethod
+        def indicadores(*args, **kwargs):
+            pass
+        @staticmethod
+        def render_tabela(df, **kwargs):
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            return df
+        @staticmethod
+        def resumir_os(*args, **kwargs):
+            return []
+        @staticmethod
+        def resumir_fms(*args, **kwargs):
+            return []
+        @staticmethod
+        def resumir_compras(*args, **kwargs):
+            return []
+        @staticmethod
+        def preparar_fms(df):
+            if df is None or df.empty:
+                return pd.DataFrame(columns=["FM", "Data_Realizada", "Periodo", "Vencimento", "Dias_Restantes", "Status"])
+            dados = df.copy()
+            datas = pd.to_datetime(dados["Data_Realizada"], errors="coerce", dayfirst=True, format="mixed")
+            dias = pd.to_numeric(dados["Dias_Prazo"], errors="coerce").fillna(0)
+            vencimento = datas + pd.to_timedelta(dias, unit="D")
+            dados["Vencimento"] = vencimento.dt.date
+            dados["Dias_Restantes"] = (vencimento.dt.normalize() - pd.Timestamp.today().normalize()).dt.days
+            dados["Status"] = dados["Dias_Restantes"].apply(lambda x: "Atrasado 🔴" if pd.notna(x) and x < 0 else "No Prazo 🟢")
+            return dados
+    quadros = _QuadrosFallback()
 from controle_acesso_filiais import filiais_permitidas, pode_gerir_todas_as_filiais
 
 # Tenta importar bibliotecas para manipulação e carimbo de PDFs
@@ -62,6 +100,7 @@ st.set_page_config(
 # Design visual isolado: tema de exibição não altera CSVs, senhas, banco nem sessões de login.
 tema_stang.inicializar_tema()
 tema_stang.aplicar_tema("capa.png")
+quadros.aplicar_estilo()
 if not repositorio.modo_producao():
     st.warning("⚠️ Banco de desenvolvimento local ativo. No Streamlit Cloud, configure DATABASE_URL para não perder dados após atualizações.")
 
@@ -1319,7 +1358,10 @@ if menu is not None:
             df_os_view['Status_Prazo'] = df_os_view.apply(determinar_status_prazo_view, axis=1)
 
             cols_exibicao = ["ID", "Data_Criacao", "Solicitante", "Setor", "Prioridade", "Prazo_Limite", "Status_Prazo", "Status", "Equipamento", "Descricao", "finalizado_por"]
-            st.dataframe(df_os_view[cols_exibicao].sort_values(by="ID", ascending=False), use_container_width=True)
+            quadro_nova_os = df_os_view[cols_exibicao].sort_values(by="ID", ascending=False)
+            quadros.indicadores(quadros.resumir_os(df_os_view))
+            quadros.render_tabela(quadro_nova_os, chave="nova_os", titulo="Últimas ordens de serviço",
+                                  ordenar_por="ID", decrescente=True)
 
     # --- TELA 2: GERENCIAR O.S. ---
     elif menu == "📋 Gerenciar O.S.":
@@ -1380,7 +1422,11 @@ if menu is not None:
                     df_filtered = df_filtered[df_filtered["finalizado_por"] == filtro_finalizador]
                     
                 cols_exibicao = ["ID", "Data_Criacao", "Solicitante", "Setor", "Prioridade", "Prazo_Limite", "Status_Prazo", "Status", "Equipamento", "Solucao", "Itens_Trocados", "finalizado_por"]
-                st.dataframe(df_filtered[cols_exibicao].sort_values(by="ID", ascending=False), use_container_width=True)
+                quadros.indicadores(quadros.resumir_os(df_filtered))
+                quadros.render_tabela(
+                    df_filtered[cols_exibicao], chave="gerenciar_os", titulo="Ordens de serviço",
+                    ordenar_por="ID", decrescente=True, mostrar_exportacao=True
+                )
                 
                 st.markdown("---")
                 
@@ -1717,16 +1763,14 @@ if menu is not None:
                             unsafe_allow_html=True
                         )
 
-                    st.dataframe(
-                        df_f_rep[
-                            [
-                                "ID", "Data_Criacao", "Solicitante", "Setor",
-                                "Equipamento", "Tipo_Manutencao", "Prioridade",
-                                "Status", "Solucao", "finalizado_por"
-                            ]
-                        ].sort_values(by="ID", ascending=False),
-                        use_container_width=True,
-                        height=420
+                    quadros.render_tabela(
+                        df_f_rep[[
+                            "ID", "Data_Criacao", "Solicitante", "Setor",
+                            "Equipamento", "Tipo_Manutencao", "Prioridade",
+                            "Status", "Solucao", "finalizado_por"
+                        ]],
+                        chave="relatorio_os", titulo="Relação de O.S. para relatório",
+                        ordenar_por="ID", decrescente=True, mostrar_exportacao=True
                     )
 
                     st.markdown("#### 🖨️ Visualização para Impressão")
@@ -1838,7 +1882,8 @@ if menu is not None:
                 df_fms["Data_Realizada"] = pd.to_datetime(
                     df_fms["Data_Realizada"],
                     errors="coerce",
-                    dayfirst=True
+                    dayfirst=True,
+                    format="mixed"  # Preserva datas ISO e brasileiras sem trocar dia/mês.
                 ).dt.date
 
                 df_fms["Dias_Prazo_int"] = pd.to_numeric(
@@ -1860,14 +1905,11 @@ if menu is not None:
                     lambda x: "Atrasado 🔴" if x < 0 else "No Prazo 🟢"
                 )
 
-                st.dataframe(
-                    df_fms[
-                        [
-                            "FM", "Data_Realizada", "Periodo",
-                            "Vencimento", "Dias_Restantes", "Status"
-                        ]
-                    ],
-                    use_container_width=True
+                quadros.indicadores(quadros.resumir_fms(df_fms))
+                quadros.render_tabela(
+                    df_fms[["FM", "Data_Realizada", "Periodo", "Vencimento", "Dias_Restantes", "Status"]],
+                    chave="prazo_fms", titulo="Prazos e status dos formulários",
+                    mostrar_exportacao=True
                 )
 
                 ui3d.titulo("Comparativo de Prazo × Dias Restantes por FM", "fms", nivel=3)
@@ -2009,7 +2051,13 @@ if menu is not None:
                 if filtro_status_v != "Todos":
                     df_view = df_view[df_view['Status_Visual'] == filtro_status_v]
 
-                st.dataframe(df_view[["ID_Compra", "Data_Solicitacao", "Solicitante", "Setor", "Categoria", "Item", "Quantidade", "Status_Visual", "Orcamento_Assinado"]], use_container_width=True, height=200)
+                quadros.indicadores(quadros.resumir_compras(df_view))
+                quadros.render_tabela(
+                    df_view[["ID_Compra", "Data_Solicitacao", "Solicitante", "Setor",
+                             "Categoria", "Item", "Quantidade", "Status_Visual", "Orcamento_Assinado"]],
+                    chave="compras", titulo="Solicitações e orçamentos",
+                    ordenar_por="ID_Compra", decrescente=True, mostrar_exportacao=True
+                )
                 
                 ids_compras = sorted(df_ger_c["ID_Compra"].unique().tolist(), reverse=True)
                 
@@ -2721,11 +2769,78 @@ if menu is not None:
             )
             return tema_stang.estilizar_grafico(fig)
 
-        # JANELA 1 — O.S.
-        aba_dash_os, aba_dash_comp = st.tabs([
+        # Visão integrada: usa somente dados da filial já autorizada e filtrada.
+        tab_integrado, aba_dash_os, aba_dash_comp = st.tabs([
+            "📋 Painel Operacional Integrado",
             ui3d.aba("Setor O.S.", "gerenciar_os"),
             ui3d.aba("Setor Compras", "compras")
         ])
+
+        with tab_integrado:
+            st.markdown("### Painel Operacional Integrado")
+            st.caption("O.S. e compras seguem os filtros de data acima. Os prazos dos FMs são exibidos por vencimento atual.")
+            df_os_integrado = df_dash_os_f.copy()
+            if not df_os_integrado.empty:
+                data_os = pd.to_datetime(df_os_integrado["Data_Criacao"], errors="coerce", dayfirst=True, format="mixed")
+                dias_por_prioridade = {"URGENTE": 1, "ALTA": 5, "MÉDIA": 15, "MEDIA": 15, "BAIXA": 30}
+                dias_os = df_os_integrado["Prioridade"].astype(str).str.upper().map(dias_por_prioridade).fillna(30).astype(int)
+                prazo_os = data_os + pd.to_timedelta(dias_os, unit="D")
+                fechado = df_os_integrado["Status"].astype(str).str.contains("finalizada|concluída", case=False, regex=True, na=False)
+                df_os_integrado["Prazo_Limite"] = prazo_os.dt.date
+                df_os_integrado["Status_Prazo"] = [
+                    "Finalizada 🔵" if fin else "Vencida 🔴" if pd.notna(dia) and dia.date() < datetime.now().date()
+                    else "No Prazo 🟢" for fin, dia in zip(fechado, prazo_os)
+                ]
+
+            # O banco de FMs continua sendo consultado via repositório da filial ativa.
+            df_integrado_fms = quadros.preparar_fms(repositorio.ler_csv(ARQUIVO_FMS, dtype=str))
+            df_integrado_comp = df_dash_comp_f.copy()
+            if not df_integrado_comp.empty:
+                def _comp_status_visual(v):
+                    x = str(v).casefold()
+                    return "Compra Realizada 🟢" if "realizada" in x else "Compra Recusada 🔴" if "recusada" in x else "Em Aberto 🟠"
+                df_integrado_comp["Status_Visual"] = df_integrado_comp["Status"].apply(_comp_status_visual)
+                df_integrado_comp["Orcamento_Assinado"] = df_integrado_comp["Orcamento_Assinado"].apply(
+                    lambda v: "✅ Anexado" if str(v).strip().casefold() not in ("", "none", "nan", "null") else "—")
+
+            os_total = len(df_os_integrado)
+            os_final = (int(df_os_integrado["Status"].astype(str).str.contains("finalizada|concluída", case=False, regex=True).sum())
+                        if os_total else 0)
+            fms_dias = pd.to_numeric(df_integrado_fms.get("Dias_Restantes", pd.Series(dtype=float)), errors="coerce")
+            total_pedidos = (df_integrado_comp["ID_Compra"].nunique() if not df_integrado_comp.empty else 0)
+            quadros.indicadores([
+                ("O.S. totais", os_total, ""),
+                ("O.S. em aberto", os_total - os_final, "warning"),
+                ("O.S. finalizadas", os_final, "good"),
+                ("FMs no prazo", int((fms_dias >= 0).sum()), "good"),
+                ("FMs atrasados", int((fms_dias < 0).sum()), "bad"),
+                ("Pedidos de compra", total_pedidos, "")
+            ])
+
+            if not df_os_integrado.empty:
+                quadros.render_tabela(
+                    df_os_integrado[["ID", "Data_Criacao", "Solicitante", "Setor", "Prioridade",
+                                     "Prazo_Limite", "Status_Prazo", "Status", "Equipamento", "Descricao"]],
+                    chave="dash_os_integrado", titulo="Gestão de Ordens de Serviço (O.S.)",
+                    ordenar_por="ID", decrescente=True, por_pagina=8, mostrar_exportacao=True
+                )
+            else:
+                st.info("Nenhuma O.S. para o período selecionado.")
+
+            quadros.render_tabela(
+                df_integrado_fms, chave="dash_fms_integrado", titulo="Prazos e status dos FMs",
+                por_pagina=8, mostrar_exportacao=True
+            )
+
+            if not df_integrado_comp.empty:
+                quadros.render_tabela(
+                    df_integrado_comp[["ID_Compra", "Data_Solicitacao", "Solicitante", "Setor", "Categoria",
+                                       "Item", "Quantidade", "Status_Visual", "Orcamento_Assinado"]],
+                    chave="dash_compras_integrado", titulo="Solicitações de Compras",
+                    ordenar_por="ID_Compra", decrescente=True, por_pagina=8, mostrar_exportacao=True
+                )
+            else:
+                st.info("Nenhuma solicitação de compra para o período selecionado.")
 
         with aba_dash_os:
             ui3d.titulo("Indicadores de Ordens de Serviço", "gerenciar_os", nivel=3)

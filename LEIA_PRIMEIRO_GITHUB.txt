@@ -1,0 +1,53 @@
+INTRANET STANG — v2.0.6.0 / MODERNIZAÇÃO DOS QUADROS OPERACIONAIS
+============================================================
+
+Arquivos que você deve publicar na RAIZ do GitHub (branch main):
+  1. Intranet.py                   (substituir o existente)
+  2. quadros_modernos.py           (novo arquivo)
+
+Projeto consultado: TS-Tec-Dev/Intranetstangteste
+Base de Intranet.py conferida em 13/11/2026:
+  SHA do arquivo original (blob Git): d29cf14a917bd3621f50390f487dcf080d28d2dc
+Se alguém atualizou Intranet.py depois desta base, compare as alterações
+antes de substituir, para não desfazer correções mais recentes.
+
+ANTES DE ATUALIZAR
+  - Faça backup completo pela Intranet e guarde-o fora do GitHub.
+  - Salve cópia do Intranet.py atual ou use o histórico de commits.
+  - Teste primeiro no ambiente Intranetstangteste e depois publique na oficial.
+
+O QUE MUDA
+  - Nova aparência dos quadros de O.S., relatório de O.S., painel de FMs e compras;
+  - Cabeçalhos limpos, status com cores, texto longo com dica ao passar o mouse;
+  - Pesquisa por texto em todas as colunas, páginas de 8/12/20/50 linhas;
+  - Indicadores por status e prioridade (calculados somente sobre os dados visíveis);
+  - Modo planilha opcional (permite classificar colunas e selecionar/copiar células);
+  - Exportação CSV e PDF para impressão, PDF gerado SOMENTE sob demanda;
+  - Dashboard ganha a aba Painel Operacional Integrado com O.S., FMs e Compras;
+  - Data de FM agora entende YYYY-MM-DD e DD/MM/YYYY sem inverter dia e mês.
+
+NÃO MUDA
+  - Supabase / DATABASE_URL / tabelas / backups / contas / permissões / logins;
+  - Lógica de gravação de O.S., compras ou FMs;
+  - Fluxos de edição, exclusão, assinatura, RH ou ferramentaria;
+  - PDF original de relatórios existentes (continua disponível).
+
+PASSO A PASSO
+  1. Extraia o ZIP no computador.
+  2. GitHub > repositório Intranetstangteste > branch main.
+  3. Add file > Upload files.
+  4. Selecione Intranet.py e quadros_modernos.py.
+  5. Commit changes.
+  6. Streamlit Cloud > Manage app > Reboot app (se necessário).
+  7. Faça Ctrl+Shift+R no navegador para renovar o cache.
+  8. Abra Dashboard > Painel Operacional Integrado.
+  9. Confira 5 O.S., 2 FMs e 2 pedidos com dados reais da filial.
+ 10. Confira os filtros, os botões de CSV e PDF, e o relatório antigo.
+
+IMPORTANTE
+  - NÃO envie banco_usuarios.csv, PDF, anexos, secrets.toml, DATABASE_URL ou
+    backup para repositório público.
+  - Se quadros_modernos.py faltar, o Intranet.py possui modo seguro que
+    continua mostrando quadros nativos, sem travar o login.
+  - Os testes executados foram locais (sintaxe, contagem, filtros, escapes e PDFs).
+    A compatibilidade final com o Streamlit Cloud precisa de validação no site.
