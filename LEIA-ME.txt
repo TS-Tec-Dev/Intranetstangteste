@@ -1,0 +1,20 @@
+INTRANET STANG - V2.0.5.9 - CORRECAO DE ESPACAMENTO
+
+Correcao estritamente visual do tema_stang.py.
+- Da um espacamento real entre "Filial de trabalho" e seu seletor.
+- Da um espacamento real entre "Aparencia" e seu seletor.
+- Remove margens negativas que cortavam os titulos.
+- Mantem o menu suspenso apenas com "Escuro" e "Claro".
+- Mantem cores e transparencia da foto da base da versao anterior.
+
+INSTALACAO:
+1. Baixe o backup atual do seu codigo/filial antes da troca.
+2. Abra GitHub > TS-Tec-Dev/Intranetstangteste > main.
+3. Substitua SOMENTE o arquivo tema_stang.py na raiz.
+4. Commit changes.
+5. No Streamlit, recarregue com Ctrl+Shift+R. Se preciso, Manage app > Reboot app.
+
+Importante: nao altere Intranet.py, banco de dados, credenciais ou anexos.
+Revision marker: REVISAO_TEMA = "2026-11-13-sidebar-v2059"
+Compatibilidade: baseado no tema_stang.py atual consultado no GitHub em 13/11/2026,
+identico ao v2.0.5.8 local, antes da correcao.

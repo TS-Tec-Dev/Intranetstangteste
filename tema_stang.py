@@ -87,7 +87,7 @@ def inicializar_tema() -> None:
 
 
 # Identificador mostrado na interface para validar a implantação no Streamlit Cloud.
-REVISAO_TEMA = "2026-11-13-sidebar-v2058"
+REVISAO_TEMA = "2026-11-13-sidebar-v2059"
 
 
 def _cores_atuais() -> dict:
@@ -245,11 +245,21 @@ def aplicar_tema(caminho_capa: str = "capa.png") -> None:
       color: var(--stang-text);
       overflow-wrap: anywhere;
     }
+    /* Os titulos sao blocos reais, com altura suficiente para os icones 3D. */
     .stang-filial-label, .stang-appearance-heading {
       display: flex; align-items: center; gap: 8px;
-      margin: .4rem 0 .3rem;
+      min-height: 34px;
+      margin: 0;
+      line-height: 1.4;
       color: var(--stang-text);
       font-size: .82rem; letter-spacing: .005em;
+    }
+    /* A margem fica no conteiner Streamlit, nao no HTML interno: evita
+       sobreposicao do titulo com os campos de filial e aparencia. */
+    [data-testid="stSidebar"] [data-testid="stMarkdown"]:has(.stang-filial-label) {
+      margin-top: .15rem !important;
+      margin-bottom: .50rem !important;
+      padding: 0 !important;
     }
     .stang-filial-label .stang-id-icon {
       width: 30px; height: 30px; flex-basis: 30px;
@@ -260,19 +270,23 @@ def aplicar_tema(caminho_capa: str = "capa.png") -> None:
       background: linear-gradient(145deg,#229fea,#074384);
       color: white; border: 1px solid rgba(160,220,255,.45);
     }
-    /* Seção Aparência compacta: título alinhado ao seletor sem aviso inferior. */
+    /* Aparencia: titulo, icone e seletor com espacamento seguro.
+       Nao usar margens negativas, pois variam conforme versao do Streamlit. */
     [data-testid="stSidebar"] [data-testid="stMarkdown"]:has(.stang-appearance-heading) {
-      margin-bottom: -.32rem;
-      padding-bottom: 0;
+      margin-top: .15rem !important;
+      margin-bottom: .60rem !important;
+      padding: 0 !important;
     }
     .stang-appearance-heading {
-      margin: .10rem 0 .05rem;
-      gap: 6px;
-      line-height: 1.2;
+      min-height: 32px;
+      gap: 8px;
+      line-height: 1.4;
     }
+    /* Separacao confortavel tambem depois dos campos de selecao. */
+    [data-testid="stSidebar"] [data-testid="stSelectbox"]:has([aria-label="Filial de trabalho"]),
     [data-testid="stSidebar"] [data-testid="stSelectbox"]:has([aria-label="Tema da Intranet"]) {
-      margin-top: 0;
-      margin-bottom: -.12rem;
+      margin-top: 0 !important;
+      margin-bottom: .30rem !important;
     }
     /* Moderniza ambos os selectboxes (filial e aparência), sem afetar menus. */
     [data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
