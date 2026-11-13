@@ -9,7 +9,7 @@ class Stub(types.ModuleType):
     def __init__(self):
         super().__init__('streamlit');self.session_state={'tema_stang':'Escuro'};self.outputs=[]
     def markdown(self, html, **kw): self.outputs.append(str(html))
-    def columns(self, nums): return [Context() for _ in range(len(nums))]
+    def columns(self, nums, **kwargs): return [Context() for _ in range(len(nums))]
     def text_input(self,*args,**kw): return ''
     def selectbox(self,*args,**kw): return kw.get('options',args[1] if len(args)>1 else [])[0] if 'options' in kw else args[1][0]
     def checkbox(self,*args,**kw): return False
@@ -17,7 +17,7 @@ class Stub(types.ModuleType):
     def download_button(self,*args,**kw): self.outputs.append('DOWNLOAD:'+str(kw.get('file_name')))
 mock=Stub()
 sys.modules['streamlit']=mock
-path='/mnt/data/stang_quadros_v206/quadros_modernos.py'
+path='/mnt/data/stang_quadros_v2061/quadros_modernos.py'
 spec=importlib.util.spec_from_file_location('quadros_modernos',path)
 mod=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
@@ -64,3 +64,31 @@ mock.session_state['tema_stang']='Claro';mock.outputs=[]
 mod.indicadores([('Teste',3,'good')]);assert 'light' in mock.outputs[0]
 
 print('8 grupos de verificações funcionais passaram.')
+
+# A nova barra tem 3 colunas em UMA linha (sem linha separada para página).
+_mock_old = mock.columns
+col_calls=[]
+def _cols(spec, **kw):
+    col_calls.append((list(spec), kw))
+    return _mock_old(spec, **kw)
+mock.columns = _cols
+mock.outputs=[]
+several=pd.DataFrame([{'ID':i,'Status':'Em Aberto'} for i in range(45)])
+mod.render_tabela(several, chave='test_layout', titulo='Tabela de O.S.')
+assert len(col_calls)==1, col_calls
+assert len(col_calls[0][0])==3, col_calls
+assert col_calls[0][1].get('gap')=='small'
+
+# Mudar para uma busca que reduz páginas não deve deixar página inválida.
+mock.session_state['stg_pagina_test_pag'] = 19
+mod.render_tabela(several,chave='test_pag',titulo='O.S.')
+assert mock.session_state['stg_pagina_test_pag']==1
+
+# A tabela de compras não deve manter os 5 seletores globais antigos.
+codigo_compra=open('/mnt/data/stang_quadros_v2061/Intranet.py',encoding='utf-8').read()
+secao=codigo_compra.split('st.markdown("### Gerenciar Solicitações e Anexar Orçamento")',1)[1].split('ids_compras =',1)[0]
+assert 'f_comp_data' not in secao and 'f_comp_solic' not in secao
+assert 'f_comp_cat' not in secao and 'f_comp_item' not in secao
+assert 'f_comp_status' not in secao
+assert 'quadros.render_tabela(' in secao
+print('3 verificações adicionais de layout, paginação e filtros passaram.')

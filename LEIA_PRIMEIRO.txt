@@ -1,16 +1,31 @@
-INTRANET STANG — Correção visual v2.0.5.8
+INTRANET STANG v2.0.6.1 — QUADROS / ESPAÇAMENTO
 
-ALTERAÇÃO SOMENTE DE APARÊNCIA
-- Remove a informação “Foto da base em destaque · tema salvo nesta sessão”.
-- O seletor passa a mostrar apenas “Escuro” e “Claro”.
-- Aproxima visualmente o título Aparência do seletor e elimina o espaçamento deixado pelo aviso.
-- Preserva a seleção e o parâmetro ?tema=, a imagem de fundo, os dois temas e os dados do Supabase.
+O QUE MUDA
+1. Na aba Solicitações de Compras > Gerenciar Solicitações e Anexar Orçamento:
+   - remove somente os cinco filtros antigos (Data, Solicitante, Categoria,
+     Item, Status). A pesquisa do novo quadro permanece funcionando.
+   - não remove os filtros globais no Dashboard.
+2. No componente quadros_modernos.py (O.S., FMs e Compras):
+   - busca, quantidade de linhas por página e seleção de página ficam
+     ALINHADOS NA MESMA LINHA, sem a linha vazia antes da tabela.
+   - a pesquisa, filtros, paginação, relatórios e exportações permanecem.
 
-INSTALAÇÃO
-1. Faça uma cópia do seu arquivo tema_stang.py atual.
-2. No GitHub Intranetstangteste, branch main, substitua SOMENTE tema_stang.py na raiz.
-3. Faça Commit changes e atualize a aplicação pelo Streamlit.
-4. Confira a opção Aparência: o menu deve listar exclusivamente Escuro e Claro.
-5. Se ainda aparecer a frase antiga, reinicie o app e pressione Ctrl+Shift+R no navegador.
+ATUALIZAÇÃO RECOMENDADA (SEM PERDER CÓDIGO RECENTE)
+A. No GitHub, baixe os arquivos *atuais* Intranet.py e quadros_modernos.py.
+B. Coloque ambos na mesma pasta do script ajustar_quadros.py e execute:
+       python ajustar_quadros.py
+C. O script confere os pontos a alterar e NÃO modifica os arquivos se a
+   versão for incompatível. Ele cria backups .antes_v2061.
+D. Envie apenas os arquivos Intranet.py e quadros_modernos.py corrigidos
+   à raiz do repositório na branch utilizada pelo Streamlit.
+E. Faça commit; atualize o Streamlit e teste as abas de Compras, FMs e O.S.
 
-IMPORTANTE: Não substitua o Intranet.py. Nenhum arquivo de banco de dados é modificado.
+ALTERNATIVA
+O ZIP também contém Intranet.py e quadros_modernos.py já corrigidos
+baseados na versão 2.0.6 trabalhada anteriormente. Use-os diretamente
+SOMENTE se não houver mudanças posteriores nesses arquivos, para evitar
+apagar atualizações feitas desde então.
+
+IMPORTANTE: Não enviar o script nem arquivos .antes_v2061 ao GitHub.
+Não altere DATABASE_URL, Secrets, usuários ou banco do Supabase.
+A alteração não está instalada na aplicação online; precisa de commit.

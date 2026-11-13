@@ -2020,36 +2020,9 @@ if menu is not None:
                 df_view = df_ger_c.copy()
                 df_view['Status_Visual'] = df_view['Status'].apply(formatar_status_compra)
                 df_view['Orcamento_Assinado'] = df_view['Orcamento_Assinado'].apply(formatar_orcamento)
-                df_view['Data_Apenas'] = df_view['Data_Solicitacao'].astype(str).str.split(" ").str[0]
-
-                col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
-                
-                with col_f1:
-                    opts_data = ["Todas"] + sorted([d for d in df_view['Data_Apenas'].dropna().unique() if str(d).strip() != ""])
-                    filtro_data = st.selectbox("📅 Data", opts_data, key="f_comp_data")
-                with col_f2:
-                    opts_solic = ["Todos"] + sorted([s for s in df_view['Solicitante'].dropna().unique() if str(s).strip() != ""])
-                    filtro_solic = st.selectbox("👤 Solicitante", opts_solic, key="f_comp_solic")
-                with col_f3:
-                    opts_cat = ["Todas"] + sorted([c for c in df_view['Categoria'].dropna().unique() if str(c).strip() != ""])
-                    filtro_cat = st.selectbox("📁 Categoria", opts_cat, key="f_comp_cat")
-                with col_f4:
-                    opts_item = ["Todos"] + sorted([i for i in df_view['Item'].dropna().unique() if str(i).strip() != ""])
-                    filtro_item = st.selectbox("📦 Item", opts_item, key="f_comp_item")
-                with col_f5:
-                    opts_status = ["Todos"] + sorted([st_v for st_v in df_view['Status_Visual'].dropna().unique() if str(st_v).strip() != ""])
-                    filtro_status_v = st.selectbox("🚦 Status", opts_status, key="f_comp_status")
-
-                if filtro_data != "Todas":
-                    df_view = df_view[df_view['Data_Apenas'] == filtro_data]
-                if filtro_solic != "Todos":
-                    df_view = df_view[df_view['Solicitante'] == filtro_solic]
-                if filtro_cat != "Todas":
-                    df_view = df_view[df_view['Categoria'] == filtro_cat]
-                if filtro_item != "Todos":
-                    df_view = df_view[df_view['Item'] == filtro_item]
-                if filtro_status_v != "Todos":
-                    df_view = df_view[df_view['Status_Visual'] == filtro_status_v]
+                # Os filtros legados da aba de compras foram removidos:
+                # a pesquisa da tabela moderna faz a filtragem por todos os campos,
+                # sem duplicar controles e sem alterar o CSV ou o Supabase.
 
                 quadros.indicadores(quadros.resumir_compras(df_view))
                 quadros.render_tabela(

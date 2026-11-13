@@ -242,28 +242,42 @@ def render_tabela(df: pd.DataFrame, *, chave: str, titulo: str,
         st.info(f'Nenhum registro disponível em {titulo.lower()}.')
         return df if isinstance(df, pd.DataFrame) else pd.DataFrame()
 
-    controles = st.columns([5, 1.5]) if busca else [None, None]
+    # Busca, quantidade de registros e página ocupam UMA ÚNICA linha.
+    # O seletor de página não cria uma linha em branco à esquerda.
     if busca:
-        with controles[0]:
-            termo = st.text_input('Buscar registros', placeholder='Buscar por código, nome, item ou descrição...',
-                                  key=f'stg_busca_{chave}', label_visibility='collapsed')
-        with controles[1]:
-            tamanho = st.selectbox('Linhas por página', [8, 12, 20, 50],
-                                   index=[8, 12, 20, 50].index(por_pagina) if por_pagina in (8,12,20,50) else 1,
-                                   key=f'stg_tamanho_{chave}', label_visibility='collapsed')
+        c_busca, c_tamanho, c_pagina = st.columns([5.2, 1.35, 1.65], gap='small')
+        with c_busca:
+            termo = st.text_input(
+                'Buscar registros',
+                placeholder='Buscar por código, nome, item ou descrição...',
+                key=f'stg_busca_{chave}', label_visibility='collapsed')
     else:
-        termo, tamanho = '', por_pagina
+        c_tamanho, c_pagina = st.columns([1, 1], gap='small')
+        termo = ''
+
+    if busca:
+        with c_tamanho:
+            tamanho = st.selectbox(
+                'Linhas por página', [8, 12, 20, 50],
+                index=[8, 12, 20, 50].index(por_pagina) if por_pagina in (8,12,20,50) else 1,
+                key=f'stg_tamanho_{chave}',
+                format_func=lambda n: f'{n} linhas', label_visibility='collapsed')
+    else:
+        tamanho = max(1, int(por_pagina))
 
     filtrado = preparar_tabela(df, termo, ordenar_por=ordenar_por, decrescente=decrescente)
     total = len(filtrado)
     paginas = max(1, math.ceil(total / tamanho))
-    if paginas > 1:
-        c_a, c_b = st.columns([4.6, 1.4])
-        with c_b:
-            pagina = st.selectbox('Página', list(range(1, paginas+1)),
-                                   key=f'stg_pagina_{chave}', format_func=lambda p: f'Página {p}/{paginas}')
-    else:
-        pagina = 1
+    chave_pagina = f'stg_pagina_{chave}'
+    pagina_atual = st.session_state.get(chave_pagina, 1)
+    if not isinstance(pagina_atual, int) or not 1 <= pagina_atual <= paginas:
+        # Ao reduzir os resultados da busca, retornar à primeira página.
+        st.session_state[chave_pagina] = 1
+    with c_pagina:
+        pagina = st.selectbox(
+            'Página', list(range(1, paginas + 1)),
+            key=chave_pagina, format_func=lambda p: f'Página {p}/{paginas}',
+            label_visibility='collapsed', disabled=(paginas == 1))
     inicio = (pagina-1) * tamanho
     atual = filtrado.iloc[inicio:inicio+tamanho]
     cabecalhos = ''.join(f'<th scope="col">{escape(NOMES.get(str(c), str(c)))}</th>' for c in atual.columns)
