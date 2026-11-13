@@ -1,20 +1,30 @@
-INTRANET STANG — HOTFIX AttributeError "documentos_existentes" (11/11/2026)
+INTRANET STANG - ASSUNTO E MENSAGEM DO E-MAIL EDITÁVEIS
 
-CAUSA
-O Intranet.py recente consulta repositorio.documentos_existentes(caminhos_pedido), mas o infra_persistencia.py da v2.0.5 nao define essa funcao. A funcao foi incluida na v2.0.5.2.
+No Painel de Assinaturas, o assunto do e-mail deixa de ser fixo. O campo
+"Assunto do E-mail" começa vazio e você escolhe qualquer texto de uma linha.
+O campo "Mensagem do E-mail" também começa vazio (opcional).
+O número do pedido continua sendo usado para localizar anexos e marcar status.
 
-INSTALACAO NA BRANCH DE TESTE
-1. Antes da troca, salve uma copia do infra_persistencia.py atual do GitHub.
-2. Confira se o arquivo atual ainda eh da familia v2.0.5/2.0.5.2. Caso tenha alteracoes posteriores personalizadas, compare os arquivos em vez de substituir tudo.
-3. No repositorio Intranetstangteste, no GitHub, abra a branch utilizada pelo Streamlit.
-4. Add file > Upload files: envie APENAS infra_persistencia.py deste ZIP para a raiz, substituindo o atual.
-5. Commit changes; no GitHub abra infra_persistencia.py e procure por "def documentos_existentes(caminhos):".
-6. Em Streamlit Community Cloud: Manage app > Reboot app e recarregue a pagina.
-7. Teste Painel de Assinaturas > pedido 552: visualizacao de estados e carimbo.
+ATENÇÃO: PRESERVE SEU CÓDIGO ATUAL
+A versão em "Intranet.py" é baseada na v2.0.5.3 conhecida aqui.
+Se você tiver atualizado qualquer outra coisa, NÃO substitua o arquivo inteiro.
 
-IMPORTANTE
-- NAO envie este arquivo ao Supabase, nao altere DATABASE_URL nem importe backups para corrigir esse erro.
-- Nao ha scripts de exclusao ou migracao destrutiva de dados neste pacote.
-- O modulo foi extraido da atualizacao v2.0.5.2 ja fornecida anteriormente.
-- O teste local verifica a consulta de existencia sem transferir os blobs. A verificacao em producao depende da sua implantacao.
-- Se receber outro erro, envie captura incluindo a linha do Intranet.py e do modulo.
+MÉTODO RECOMENDADO (não perde outras modificações):
+1. Baixe o Intranet.py ATUAL no GitHub e coloque-o em uma pasta do PC.
+2. Coloque "aplicar_patch_seguro.py" na mesma pasta.
+3. No terminal dessa pasta, execute: python aplicar_patch_seguro.py
+4. O script salvará Intranet.py.antes_assunto.bak como cópia de segurança.
+5. Envie o Intranet.py atualizado para a raiz do repositório no GitHub.
+6. Faça o commit e reinicie a aplicação no Streamlit.
+
+O script verifica se os trechos esperados existem e não altera o arquivo se
+estiverem ausentes ou incompatíveis; não mexe em banco, senha, conta ou PDF.
+
+MÉTODO SIMPLES (somente se o seu arquivo atual é a mesma v2.0.5.3):
+- Envie o Intranet.py deste ZIP ao GitHub substituindo o arquivo existente.
+
+TESTE:
+Selecione o pedido 553 -> Escreva seu próprio assunto e mensagem ->
+Envie para um endereço de teste -> confira o título do e-mail recebido.
+
+Nenhum CSV, senha, segredo ou arquivo de clientes está incluído neste pacote.

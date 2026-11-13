@@ -2476,13 +2476,29 @@ if menu is not None:
                 with st.form("form_enviar_email_docs"):
                     st.markdown("**📧 Enviar Documentos por E-mail:**")
                     dest_email = st.text_input("E-mail do Destinatário", value="financeiro@stang.com.br")
-                    obs_email = st.text_area("Observações do E-mail", value="", height=100)
+                    assunto_email = st.text_input(
+                        "Assunto do E-mail *",
+                        value="",
+                        placeholder="Digite o assunto que deve aparecer ao destinatário",
+                        key=f"assunto_email_pedido_{id_sel_ass}",
+                    )
+                    mensagem_email = st.text_area(
+                        "Mensagem do E-mail",
+                        value="",
+                        height=100,
+                        placeholder="Escreva livremente a mensagem (opcional)",
+                        key=f"mensagem_email_pedido_{id_sel_ass}",
+                    )
 
                     btn_enviar_e = st.form_submit_button("🚀 Enviar E-mail com Anexos", use_container_width=True)
 
                     if btn_enviar_e:
-                        if not dest_email:
+                        if not dest_email.strip():
                             st.error("Informe o e-mail do destinatário.")
+                        elif not assunto_email.strip():
+                            st.error("Informe o assunto do e-mail antes de enviar.")
+                        elif "\r" in assunto_email or "\n" in assunto_email:
+                            st.error("O assunto do e-mail deve ocupar apenas uma linha.")
                         else:
                             df_u_l = repositorio.ler_csv(ARQUIVO_USERS, dtype=str)
                             row_u_l = df_u_l[df_u_l["Usuario"].str.lower() == st.session_state.usuario.lower()]
@@ -2514,12 +2530,10 @@ if menu is not None:
                                     st.error("Não há documentos anexados a este pedido. O e-mail NÃO foi enviado.")
                                     st.stop()
 
-                                corpo_dinamico = f"Documentação referente ao Pedido de Compra #{id_sel_ass}.\n\nObservações: {obs_email}" if obs_email else f"Documentação referente ao Pedido de Compra #{id_sel_ass}."
-
                                 sucesso_e, msg_e = enviar_email_real(
-                                    destinatario=dest_email,
-                                    assunto=f"Documentação do Pedido de Compra #{id_sel_ass} - Intranet Stang",
-                                    corpo=corpo_dinamico,
+                                    destinatario=dest_email.strip(),
+                                    assunto=assunto_email.strip(),
+                                    corpo=mensagem_email,
                                     anexos=anexos_envio,
                                     config=cfg_e_dict
                                 )
