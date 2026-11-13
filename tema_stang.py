@@ -87,7 +87,7 @@ def inicializar_tema() -> None:
 
 
 # Identificador mostrado na interface para validar a implantação no Streamlit Cloud.
-REVISAO_TEMA = "2026-11-13-sidebar-v2057"
+REVISAO_TEMA = "2026-11-13-sidebar-v2058"
 
 
 def _cores_atuais() -> dict:
@@ -150,17 +150,10 @@ def controle_tema() -> None:
         "Tema da Intranet",
         options=TEMAS,
         index=TEMAS.index(atual),
-        format_func=lambda valor: (
-            "🌙  Modo escuro — Azul petróleo" if valor == "Escuro"
-            else "☀️  Modo claro — Branco gelo"
-        ),
+        format_func=lambda valor: valor,
         key="tema_stang_seletor_v4",
         on_change=_alterar_tema_por_selecao,
         label_visibility="collapsed",
-    )
-    st.markdown(
-        '<div class="stang-theme-hint">Foto da base em destaque · tema salvo nesta sessão</div>',
-        unsafe_allow_html=True,
     )
 
 
@@ -267,9 +260,19 @@ def aplicar_tema(caminho_capa: str = "capa.png") -> None:
       background: linear-gradient(145deg,#229fea,#074384);
       color: white; border: 1px solid rgba(160,220,255,.45);
     }
-    .stang-theme-hint {
-      font-size: .69rem; line-height: 1.35;
-      color: var(--stang-muted); margin: .25rem 0 .6rem;
+    /* Seção Aparência compacta: título alinhado ao seletor sem aviso inferior. */
+    [data-testid="stSidebar"] [data-testid="stMarkdown"]:has(.stang-appearance-heading) {
+      margin-bottom: -.32rem;
+      padding-bottom: 0;
+    }
+    .stang-appearance-heading {
+      margin: .10rem 0 .05rem;
+      gap: 6px;
+      line-height: 1.2;
+    }
+    [data-testid="stSidebar"] [data-testid="stSelectbox"]:has([aria-label="Tema da Intranet"]) {
+      margin-top: 0;
+      margin-bottom: -.12rem;
     }
     /* Moderniza ambos os selectboxes (filial e aparência), sem afetar menus. */
     [data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {

@@ -1,35 +1,16 @@
-INTRANET STANG — v2.0.5.7
-Ajuste visual da barra lateral e transparência da foto da base
-13/11/2026
+INTRANET STANG — Correção visual v2.0.5.8
 
-CONTEÚDO PARA O GITHUB:
-1) Intranet.py — substituir o existente na RAIZ
-2) tema_stang.py — substituir o existente na RAIZ
+ALTERAÇÃO SOMENTE DE APARÊNCIA
+- Remove a informação “Foto da base em destaque · tema salvo nesta sessão”.
+- O seletor passa a mostrar apenas “Escuro” e “Claro”.
+- Aproxima visualmente o título Aparência do seletor e elimina o espaçamento deixado pelo aviso.
+- Preserva a seleção e o parâmetro ?tema=, a imagem de fundo, os dois temas e os dados do Supabase.
 
 INSTALAÇÃO
-1. Salve uma cópia do Intranet.py e do tema_stang.py atuais do GitHub.
-2. No repositório TS-Tec-Dev/Intranetstangteste (branch main), selecione Add file > Upload files.
-3. Envie APENAS Intranet.py e tema_stang.py deste pacote. Não envie LEIA_PRIMEIRO.txt, caso não queira.
-4. Confirme Commit changes; depois recarregue o Streamlit (Ctrl+Shift+R).
-5. Confira a barra lateral: cartão Logado como/Perfil, Filial, Aparência e os demais menus.
+1. Faça uma cópia do seu arquivo tema_stang.py atual.
+2. No GitHub Intranetstangteste, branch main, substitua SOMENTE tema_stang.py na raiz.
+3. Faça Commit changes e atualize a aplicação pelo Streamlit.
+4. Confira a opção Aparência: o menu deve listar exclusivamente Escuro e Claro.
+5. Se ainda aparecer a frase antiga, reinicie o app e pressione Ctrl+Shift+R no navegador.
 
-MUDANÇAS
-- Retira o expansível 'Diagnóstico de carregamento' no rodapé da sidebar.
-- Retira a expressão '— Backup unificado' do texto de versão. A FUNÇÃO DE BACKUP CONTINUA EXISTINDO E INALTERADA.
-- Cartão de identidade com três ícones novos em PNG base64 (usuário, perfil e filial), integrados ao Intranet.py sem arquivos adicionais.
-- Troca os botões do tema por um seletor suspenso 'Modo escuro' / 'Modo claro'.
-- Trata alterações repetidas de tema, inclusive seleção inesperada, sem KeyError.
-- Permite enxergar melhor a foto da base, reduzindo a opacidade do gradiente nos dois temas.
-- Mantém comportamento de filiais/autorização, RH, pedidos, O.S., anexos e demais módulos.
-
-NÃO É NECESSÁRIO
-- Modificar DATABASE_URL/Secrets ou Supabase.
-- Refazer usuários/senhas, migrar dados ou carregar bancos CSV.
-- Reinstalar os demais módulos ou recriar ícones 3D de menu.
-
-NOTAS
-- Alteração preparada sobre Intranet.py da branch main em 13/11/2026 (idêntico à v2.0.5.6 do pacote anterior).
-- Se o arquivo no GitHub for alterado depois desta preparação, compare as diferenças antes de substituir.
-- O tema usa capa_otimizada.webp se disponível, senão capa.png.
-- Testes locais: sintaxe, integridade dos três PNGs, alternância tema escuro/claro/repetição e preservação dos principais blocos de navegação. Ainda não validado no Streamlit Cloud.
-- Se o navegador exibir cores antigas, recarregue com Ctrl+Shift+R.
+IMPORTANTE: Não substitua o Intranet.py. Nenhum arquivo de banco de dados é modificado.
