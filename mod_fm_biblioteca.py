@@ -13,6 +13,19 @@ from pathlib import PurePosixPath
 
 import pandas as pd
 import streamlit as st
+# Aparência 3D opcional: nenhuma regra de RH/estoque/backup depende dos ícones.
+try:
+    import menu_icones_3d as ui3d
+except ImportError:
+    class _Fallback3D:
+        @staticmethod
+        def titulo(texto, chave, nivel=1):
+            st.markdown('#'*nivel + ' ' + texto)
+        @staticmethod
+        def aba(texto, chave):
+            return texto
+    ui3d = _Fallback3D()
+
 from sqlalchemy import select, delete, insert
 
 import infra_persistencia as repo
@@ -179,7 +192,7 @@ def _montar_zip(filial: str, modelos: list[dict]) -> bytes:
 
 
 def renderizar(filial: str, administrador: bool = False) -> None:
-    st.subheader('📁 Biblioteca de modelos de Formulários (FM)')
+    ui3d.titulo('Biblioteca de modelos de Formulários (FM)','fms',nivel=2)
     st.caption('PDFs armazenados permanentemente no banco externo, separados por filial. O calendário de vencimentos é controlado nas outras abas.')
     documentos = listar(filial)
     st.metric('Modelos PDF disponíveis', len(documentos))

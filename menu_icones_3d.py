@@ -339,47 +339,107 @@ _IMAGENS = {
 }
 
 
-def rotulo_menu(valor):
-    """Oculta o emoji original apenas na apresentação do componente.
+# -------------------------------------------------------------------------
+# Renderização nativa dos ícones (sem depender da estrutura CSS do st.radio).
+# Os valores do banco/permissões/menu NÃO são alterados.
+# -------------------------------------------------------------------------
+import re
+from functools import lru_cache
+from html import escape as _escape_html
 
-    O valor devolvido por st.radio permanece igual ao item de TODOS_MENUS.
-    """
+_ROTULOS = {
+    'nova_os': '📝 Nova O.S.',
+    'gerenciar_os': '📋 Gerenciar O.S.',
+    'imprimir_os': '🖨️ Imprimir O.S.',
+    'fms': '📅 Formulários e Prazos (FMs)',
+    'compras': '🛒 Solicitações de Compras',
+    'assinaturas': '✍️ Painel de Assinaturas',
+    'dashboard': '📊 Dashboard',
+    'ferramentaria': '🧰 Ferramentaria',
+    'rh': '👥 Gestão de RH',
+    'filiais': '🏢 Filiais e Backup',
+}
+
+# Apaga pictogramas nas descrições visualizadas, não nos valores internos.
+_EMOJI_RE = re.compile(r'[\U0001F000-\U0001FAFF\u2300-\u27BF\uFE0F\u200D]')
+
+
+def _sem_emoji(texto: str) -> str:
+    return ' '.join(_EMOJI_RE.sub('', str(texto)).split())
+
+
+@lru_cache(maxsize=20)
+def _data_url(chave: str) -> str:
+    identificador = _ROTULOS.get(chave, chave)
+    pedacos = _IMAGENS.get(identificador)
+    if not pedacos:
+        return ''
+    return 'data:image/webp;base64,' + ''.join(pedacos)
+
+
+def imagem_markdown(chave: str, fallback='🔹') -> str:
+    """st.radio e st.tabs aceitam imagens em rótulos Markdown."""
+    uri = _data_url(chave)
+    return f'![{fallback}]({uri})' if uri else fallback
+
+
+def rotulo_menu(valor):
+    """Apenas formatação. Retorno do st.radio continua sendo o valor original."""
     texto = str(valor)
     if texto in _IMAGENS:
-        return texto.split(" ", 1)[1]
+        return imagem_markdown(texto, texto.split(' ', 1)[0]) + ' ' + _sem_emoji(texto)
     return texto
 
 
-@lru_cache(maxsize=24)
-def _estilo_para_menus(menus):
-    """Gera CSS na ordem das opções REAIS (filtradas por permissão)."""
-    seletor = '[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"]'
-    css = [
-        f'{seletor} > label [data-testid="stMarkdownContainer"] p '
-        '{display:flex; align-items:center; line-height:1.25; min-height:24px;}',
-        f'{seletor} > label {{border-radius:9px; transition:background-color .15s ease;}}',
-        f'{seletor} > label:hover '
-        '{background-color:rgba(66,153,225,.10);}',
-    ]
-    for i, titulo in enumerate(menus, start=1):
-        codigo = _IMAGENS.get(titulo)
-        if not codigo:
-            continue
-        imagem = ''.join(codigo)
-        alvo = (f'{seletor} > label:nth-child({i}) '
-                '[data-testid="stMarkdownContainer"] p::before')
-        css.append(
-            f'{alvo} {{content:""; display:inline-block; flex:0 0 24px; '
-            f'width:24px; height:24px; margin-right:8px; '
-            f'background-image:url("data:image/webp;base64,{imagem}"); '
-            'background-position:center; background-repeat:no-repeat; '
-            'background-size:contain; }}'
-        )
-    return '<style>' + '\n'.join(css) + '</style>'
+def aba(texto: str, chave: str) -> str:
+    """Rótulo visual do st.tabs, sem alterar a lógica do conteúdo da aba."""
+    fallback = str(texto).split(' ', 1)[0] if texto else '🔹'
+    return imagem_markdown(chave, fallback) + ' ' + _sem_emoji(texto)
 
 
-def aplicar_estilo(menus_disponiveis):
-    """Adiciona apenas CSS leve e otimizado para o menu permitido ao usuário."""
-    if not menus_disponiveis:
+def titulo(texto: str, chave: str, nivel: int = 1):
+    """Cabeçalho com ícone 3D real e texto sem emoji, adaptável a claro/escuro."""
+    nivel = max(1, min(4, int(nivel)))
+    txt = _escape_html(_sem_emoji(texto))
+    url = _data_url(chave)
+    # Evita st.image/media endpoint, que apresentou falhas intermitentes no app.
+    if not url:
+        st.markdown('#' * nivel + ' ' + str(texto))
         return
-    st.markdown(_estilo_para_menus(tuple(menus_disponiveis)), unsafe_allow_html=True)
+    sz = 34 if nivel == 1 else (27 if nivel == 2 else 22)
+    st.markdown(
+        f'<div class="stang-3d-cabecalho stang-3d-nivel-{nivel}" '
+        'style="display:flex;align-items:center;gap:10px;margin:0 0 12px 0;">'
+        f'<img alt="" src="{url}" width="{sz}" height="{sz}" '
+        f'style="width:{sz}px;height:{sz}px;flex-shrink:0;object-fit:contain;"/>'
+        f'<h{nivel} style="color:inherit;margin:0;line-height:1.22;'
+        'letter-spacing:-.02em;">'
+        f'{txt}</h{nivel}></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def aplicar_estilo(menus_disponiveis=None):
+    """CSS genérico: não esconde emojis nem pressupõe uma estrutura DOM fixa.
+
+    O formato das opções st.radio/st.tabs carrega o ícone via Markdown;
+    caso a imagem seja ignorada, o alt do Markdown preserva um símbolo.
+    """
+    st.markdown("""<style>
+      [data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] img {
+        width:23px!important;height:23px!important;max-height:23px!important;
+        object-fit:contain;vertical-align:middle;margin-right:7px;
+      }
+      [data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label {
+        border-radius:9px;transition:background-color .15s;
+      }
+      [data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] label:hover {
+        background:rgba(60,146,230,.12);
+      }
+      [data-baseweb="tab"] img {width:19px!important;height:19px!important;
+        max-height:19px!important;object-fit:contain;vertical-align:middle;margin-right:4px;}
+      .stang-3d-cabecalho h1 {font-size:clamp(1.4rem,2vw,2rem)!important;font-weight:740;}
+      .stang-3d-cabecalho h2 {font-size:1.5rem!important;font-weight:710;}
+      .stang-3d-cabecalho h3 {font-size:1.2rem!important;font-weight:690;}
+      .stang-3d-cabecalho h4 {font-size:1rem!important;font-weight:670;}
+    </style>""", unsafe_allow_html=True)

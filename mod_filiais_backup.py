@@ -3,6 +3,19 @@ from datetime import datetime
 import hashlib
 import streamlit as st
 
+# Aparência 3D opcional: nenhuma regra de RH/estoque/backup depende dos ícones.
+try:
+    import menu_icones_3d as ui3d
+except ImportError:
+    class _Fallback3D:
+        @staticmethod
+        def titulo(texto, chave, nivel=1):
+            st.markdown('#'*nivel + ' ' + texto)
+        @staticmethod
+        def aba(texto, chave):
+            return texto
+    ui3d = _Fallback3D()
+
 import infra_persistencia as repo
 import backup_unificado
 from controle_acesso_filiais import validar_sessao
@@ -18,7 +31,7 @@ def renderizar(filial, usuario=None):
         st.error(str(exc))
         return
 
-    st.markdown('# 🗄️ Backup da Intranet Stang')
+    ui3d.titulo('Backup da Intranet Stang','filiais')
     st.caption('Um único arquivo criptografado para todos os usuários, filiais, compras, O.S., FMs, documentos, RH e ferramentaria.')
     if not repo.modo_producao():
         st.error('Banco externo não configurado. Não faça backups para produção em SQLite temporário.')
@@ -27,10 +40,10 @@ def renderizar(filial, usuario=None):
         st.warning('O backup geral contém dados e credenciais de todas as filiais. Somente um administrador autorizado a TODAS as filiais pode exportá-lo ou restaurá-lo.')
         return
     st.info('Backups da versão anterior permanecem guardados onde você os salvou. A partir desta versão, use apenas um arquivo **.stangtotal** para as novas cópias completas.')
-    aba_exportar, aba_importar = st.tabs(['📤 Exportar backup', '📥 Importar backup'])
+    aba_exportar, aba_importar = st.tabs([ui3d.aba('Exportar backup','filiais'), ui3d.aba('Importar backup','filiais')])
 
     with aba_exportar:
-        st.subheader('Exportar todos os dados')
+        ui3d.titulo('Exportar todos os dados','filiais',nivel=2)
         st.caption('Inclui as contas e permissões, hashes de senha de login, e-mails/tokens SMTP, assinaturas, todas as filiais e seus PDFs. Não envie este arquivo ao GitHub.')
         with st.form('form_backup_unificado_v205'):
             senha_admin = st.text_input('Sua senha atual de administrador', type='password')
@@ -58,7 +71,7 @@ def renderizar(filial, usuario=None):
         st.caption('Para evitar divergências entre lançamentos feitos ao mesmo tempo, gere backups preferencialmente fora do horário de operação.')
 
     with aba_importar:
-        st.subheader('Importar backup completo')
+        ui3d.titulo('Importar backup completo','filiais',nivel=2)
         st.warning('A restauração substituirá os dados operacionais das filiais contidas no arquivo e poderá restaurar senhas e permissões anteriores. Faça uma cópia do estado ATUAL antes de confirmar.')
         arquivo = st.file_uploader('Arquivo completo .stangtotal', type=['stangtotal'], key='restore_total_upload_v205')
         senha_import = st.text_input('Senha usada para proteger este arquivo', type='password', key='restore_total_pass_v205')

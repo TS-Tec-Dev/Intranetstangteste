@@ -12,6 +12,19 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
+# Aparência 3D opcional: nenhuma regra de RH/estoque/backup depende dos ícones.
+try:
+    import menu_icones_3d as ui3d
+except ImportError:
+    class _Fallback3D:
+        @staticmethod
+        def titulo(texto, chave, nivel=1):
+            st.markdown('#'*nivel + ' ' + texto)
+        @staticmethod
+        def aba(texto, chave):
+            return texto
+    ui3d = _Fallback3D()
+
 from sqlalchemy import and_, delete, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -331,7 +344,7 @@ def _selecionar_colaborador(rows,key,rotulo='Colaborador'):
 
 
 def renderizar(filial,usuario,administrador):
-    st.markdown('# 👥 Gestão de RH — Colaboradores, Horas, Férias e ASO')
+    ui3d.titulo('Gestão de RH — Colaboradores, Horas, Férias e ASO', 'rh')
     st.caption(f'Filial: {filial} · Informações administrativas reservadas · SMT: alerta 7 dias antes do vencimento')
     if not administrador:
         st.error('Acesso restrito a administradores. Solicite autorização ao responsável pelo RH.')
@@ -339,12 +352,12 @@ def renderizar(filial,usuario,administrador):
     if not repo.modo_producao():
         st.error('Configure DATABASE_URL para armazenar dados de RH permanentemente. Não cadastre colaboradores no banco local.')
         return
-    tabs=st.tabs(['📊 Painel RH','👤 Colaboradores','⏱️ Controle de Horas','🏖️ Férias','🩺 ASO e SMT'])
+    tabs=st.tabs([ui3d.aba('Painel RH','dashboard'),ui3d.aba('Colaboradores','rh'),ui3d.aba('Controle de Horas','dashboard'),ui3d.aba('Férias','fms'),ui3d.aba('ASO e SMT','fms')])
     rows=colaboradores(filial,True)
     ativos=[r for r in rows if r['ativo']]
     mapa={r['id']:r for r in rows}
     with tabs[0]:
-        st.subheader('Vencimentos e prioridades')
+        ui3d.titulo('Vencimentos e prioridades','dashboard',nivel=2)
         resumo=[]
         for r in ativos:
             ciclos=ciclos_ferias(filial,r['id'])
@@ -376,7 +389,7 @@ def renderizar(filial,usuario,administrador):
         else:st.success('Sem pendências detectadas nos ciclos/ASOs cadastrados.')
         st.info('A tabela de ASOs considera o registro de vencimento mais recente por colaborador e tipo. Ciclos históricos sem registro de férias podem aparecer vencidos. Atualize o marco inicial de apuração ou lance os períodos já gozados. A situação de ASO depende do vencimento definido pelo PCMSO.')
     with tabs[1]:
-        st.subheader('Cadastro de colaboradores')
+        ui3d.titulo('Cadastro de colaboradores','rh',nivel=2)
         with st.form('rh_novo_colaborador'):
             c1,c2=st.columns(2)
             mat=c1.text_input('Matrícula / Código *')
@@ -412,7 +425,7 @@ def renderizar(filial,usuario,administrador):
                             st.success('Cadastro atualizado.');st.rerun()
                         except ValueError as ex:st.error(str(ex))
     with tabs[2]:
-        st.subheader('Controle diário de horas')
+        ui3d.titulo('Controle diário de horas','dashboard',nivel=2)
         st.caption('Registro manual gerencial. Não substitui o sistema legal de controle de ponto nem calcula adicional noturno ou regras de convenções coletivas.')
         if not ativos:st.info('Cadastre colaboradores primeiro.')
         else:
@@ -439,7 +452,7 @@ def renderizar(filial,usuario,administrador):
                     Observações=r['observacoes']) for r in registros]),hide_index=True,use_container_width=True)
                 _baixar_csv('📥 Exportar horas CSV',registros,f'rh_horas_{filial}_{cid}.csv','rhh_csv')
     with tabs[3]:
-        st.subheader('Férias — períodos aquisitivos e concessivos')
+        ui3d.titulo('Férias — períodos aquisitivos e concessivos','fms',nivel=2)
         st.caption('CLT, arts. 130 e 134: duração conforme faltas injustificadas e até 3 parcelas, uma ≥14 dias e demais ≥5. Acordo coletivo e situações especiais devem ser verificados pelo DP.')
         if not ativos:st.info('Cadastre colaboradores primeiro.')
         else:
@@ -492,7 +505,7 @@ def renderizar(filial,usuario,administrador):
                             except ValueError as ex:st.error(str(ex))
             else:st.info('Nenhum ciclo de férias no intervalo monitorado.')
     with tabs[4]:
-        st.subheader('ASOs — prazo e agendamento na SMT Saúde Ocupacional')
+        ui3d.titulo('ASOs — prazo e agendamento na SMT Saúde Ocupacional','fms',nivel=2)
         st.info('Procedimento interno: solicitar agendamento 7 dias antes do vencimento informado. A periodicidade do ASO deve ser definida pelo PCMSO/NR-7, sem pressupor que todos sejam anuais.')
         if not ativos:st.info('Cadastre colaboradores primeiro.')
         else:

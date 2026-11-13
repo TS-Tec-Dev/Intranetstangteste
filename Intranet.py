@@ -1,4 +1,16 @@
 import streamlit as st
+
+try:
+    import menu_icones_3d as ui3d
+except ImportError:
+    class _Ui3dFallback:
+        @staticmethod
+        def titulo(texto, chave, nivel=1):
+            st.markdown('#' * nivel + ' ' + texto)
+        @staticmethod
+        def aba(texto, chave):
+            return texto
+    ui3d = _Ui3dFallback()
 from time import perf_counter
 
 _INTRANET_INICIO_EXECUCAO = perf_counter()
@@ -1157,11 +1169,11 @@ with st.sidebar:
         # Ícones 3D apenas visuais: as opções originais são preservadas para
         # permissões, comparações de menu, backups e navegação.
         try:
-            import menu_icones_3d
-            menu_icones_3d.aplicar_estilo(menus_disponiveis)
-            _rotulo_menu = menu_icones_3d.rotulo_menu
-        except (ImportError, OSError, ValueError) as _erro_icone:
-            # Falha segura: sem o módulo visual, permanecem os emojis originais.
+            import menu_icones_3d as ui3d
+            ui3d.aplicar_estilo(menus_disponiveis)
+            _rotulo_menu = ui3d.rotulo_menu
+        except (ImportError, OSError, ValueError):
+            # Nunca remove os ícones padrão se houver falha de importação.
             _rotulo_menu = str
         menu = st.radio("Navegação Principal", menus_disponiveis, format_func=_rotulo_menu)
     else:
@@ -1200,7 +1212,7 @@ if menu is not None:
         mod_filiais_backup.renderizar(st.session_state.filial_ativa, st.session_state.usuario)
     # --- TELA 1: CRIAR NOVA O.S. ---
     elif menu == "📝 Nova O.S.":
-        st.markdown("# 📝 Abertura de Ordem de Serviço (O.S.)")
+        ui3d.titulo("Abertura de Ordem de Serviço (O.S.)", "nova_os")
         st.markdown("Preencha os dados abaixo para registrar a solicitação de manutenção.")
         
         with st.form("form_nova_os", clear_on_submit=True):
@@ -1285,13 +1297,13 @@ if menu is not None:
 
     # --- TELA 2: GERENCIAR O.S. ---
     elif menu == "📋 Gerenciar O.S.":
-        st.markdown("# 📋 Painel de Controle e Gestão de O.S.")
+        ui3d.titulo("Painel de Controle e Gestão de O.S.", "gerenciar_os")
         df = carregar_banco_os()
         
         if df.empty:
             st.info("Nenhuma O.S. registrada no momento.")
         else:
-            aba_os_manag1, aba_os_manag2 = st.tabs(["📋 Gerenciar O.S.", "📧 Enviar O.S. por E-mail"])
+            aba_os_manag1, aba_os_manag2 = st.tabs([ui3d.aba("Gerenciar O.S.", "gerenciar_os"), ui3d.aba("Enviar O.S. por E-mail", "assinaturas")])
             
             # --- ABA 1: GERENCIAR O.S. ---
             with aba_os_manag1:
@@ -1346,7 +1358,7 @@ if menu is not None:
                 
                 st.markdown("---")
                 
-                aba_os_ges1, aba_os_ges2 = st.tabs(["✏️ Editar / Finalizar O.S.", "🗑️ Excluir O.S."])
+                aba_os_ges1, aba_os_ges2 = st.tabs([ui3d.aba("Editar / Finalizar O.S.", "gerenciar_os"), ui3d.aba("Excluir O.S.", "gerenciar_os")])
                 
                 with aba_os_ges1:
                     ids_os_lista = sorted(df["ID"].tolist(), reverse=True)
@@ -1563,13 +1575,13 @@ if menu is not None:
 
     # --- TELA 3: EMISSÃO E RELATÓRIOS DE O.S. ---
     elif menu == "🖨️ Imprimir O.S.":
-        st.markdown("# 🖨️ Emissão e Relatórios de O.S.")
+        ui3d.titulo("Emissão e Relatórios de O.S.", "imprimir_os")
         df = carregar_banco_os()
 
         if df.empty:
             st.warning("Não há O.S. cadastradas para impressão.")
         else:
-            tab_imp1, tab_imp2 = st.tabs(["📄 Imprimir O.S.", "📊 Relatório Geral de O.S."])
+            tab_imp1, tab_imp2 = st.tabs([ui3d.aba("Imprimir O.S.", "imprimir_os"), ui3d.aba("Relatório Geral de O.S.", "dashboard")])
 
             with tab_imp1:
                 lista_os = (
@@ -1701,8 +1713,8 @@ if menu is not None:
                     st.info("Nenhuma O.S. encontrada para os filtros selecionados.")
     # --- TELA 4: FORMULÁRIOS E PRAZOS (FMS) ---
     elif menu == "📅 Formulários e Prazos (FMs)":
-        st.markdown("# 📅 Gestão de Conformidade de Formulários (FMs)")
-        tab_fm1, tab_fm2, tab_fm3, tab_fm4 = st.tabs(["➕ Registrar / 🔄 Renovar FM", "🗑️ Excluir FM", "📊 Painel de Prazos e Status", "📁 Biblioteca de FMs (PDF)"])
+        ui3d.titulo("Gestão de Conformidade de Formulários (FMs)", "fms")
+        tab_fm1, tab_fm2, tab_fm3, tab_fm4 = st.tabs([ui3d.aba("Registrar / Renovar FM", "fms"), ui3d.aba("Excluir FM", "fms"), ui3d.aba("Painel de Prazos e Status", "dashboard"), ui3d.aba("Biblioteca de FMs (PDF)", "fms")])
         
         dias_dict = {
             "Diário (1 dia)": 1,
@@ -1832,7 +1844,7 @@ if menu is not None:
                     use_container_width=True
                 )
 
-                st.markdown("### 📊 Comparativo de Prazo × Dias Restantes por FM")
+                ui3d.titulo("Comparativo de Prazo × Dias Restantes por FM", "fms", nivel=3)
 
                 df_graf_fm = df_fms[
                     ["FM", "Dias_Prazo_int", "Dias_Restantes", "Status"]
@@ -1909,12 +1921,12 @@ if menu is not None:
 
     # --- TELA 5: SOLICITAÇÕES DE COMPRAS ---
     elif menu == "🛒 Solicitações de Compras":
-        st.markdown("# 🛒 Solicitações de Materiais e Insumos")
+        ui3d.titulo("Solicitações de Materiais e Insumos", "compras")
         
         if "carrinho_compras" not in st.session_state:
             st.session_state.carrinho_compras = []
             
-        abas_compras = st.tabs(["📋 Gerenciar Solicitações", "📝 Nova Solicitação", "🖨️ Imprimir Ordem de Compra"])
+        abas_compras = st.tabs([ui3d.aba("Gerenciar Solicitações", "compras"), ui3d.aba("Nova Solicitação", "nova_os"), ui3d.aba("Imprimir Ordem de Compra", "imprimir_os")])
         tab_comp1, tab_comp2, tab_comp3 = abas_compras
         
         with tab_comp1:
@@ -2313,7 +2325,7 @@ if menu is not None:
 
     # --- TELA 6: PAINEL DE ASSINATURAS ---
     elif menu == "✍️ Painel de Assinaturas":
-        st.markdown("# ✍️ Painel de Assinaturas (NF e Boleto)")
+        ui3d.titulo("Painel de Assinaturas (NF e Boleto)", "assinaturas")
 
         df_ass = repositorio.ler_csv(ARQUIVO_COMPRAS, dtype=str)
         if df_ass.empty:
@@ -2568,7 +2580,7 @@ if menu is not None:
 
     # --- TELA 6: DASHBOARD ---
     elif menu == "📊 Dashboard":
-        st.markdown("# 📊 Dashboard Gerencial")
+        ui3d.titulo("Dashboard Gerencial", "dashboard")
         st.caption("Filtros globais aplicados às janelas de Compras e O.S.")
 
         # Carregamento independente das duas bases para não alterar a área de Compras.
@@ -2685,12 +2697,12 @@ if menu is not None:
 
         # JANELA 1 — O.S.
         aba_dash_os, aba_dash_comp = st.tabs([
-            "🔧 Setor O.S.",
-            "🛒 Setor Compras"
+            ui3d.aba("Setor O.S.", "gerenciar_os"),
+            ui3d.aba("Setor Compras", "compras")
         ])
 
         with aba_dash_os:
-            st.markdown("### 🔧 Indicadores de Ordens de Serviço")
+            ui3d.titulo("Indicadores de Ordens de Serviço", "gerenciar_os", nivel=3)
 
             k1, k2, k3, k4 = st.columns(4)
             total_os = len(df_dash_os_f)
@@ -2795,7 +2807,7 @@ if menu is not None:
 
         # JANELA 2 — COMPRAS
         with aba_dash_comp:
-            st.markdown("### 🛒 Indicadores de Solicitações de Compras")
+            ui3d.titulo("Indicadores de Solicitações de Compras", "compras", nivel=3)
 
             def _status_compra_dashboard(valor):
                 v = str(valor).lower()

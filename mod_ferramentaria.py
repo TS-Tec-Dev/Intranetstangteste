@@ -1,15 +1,28 @@
 """Tela de ferramentas e materiais: operações sempre vinculadas à filial ativa."""
 import pandas as pd
 import streamlit as st
+# Aparência 3D opcional: nenhuma regra de RH/estoque/backup depende dos ícones.
+try:
+    import menu_icones_3d as ui3d
+except ImportError:
+    class _Fallback3D:
+        @staticmethod
+        def titulo(texto, chave, nivel=1):
+            st.markdown('#'*nivel + ' ' + texto)
+        @staticmethod
+        def aba(texto, chave):
+            return texto
+    ui3d = _Fallback3D()
+
 from sqlalchemy.exc import IntegrityError
 import infra_persistencia as repo
 from impressao_conferencia_estoque import gerar_formulario_conferencia
 
 
 def renderizar(filial, usuario, administrador=False):
-    st.markdown('# 🧰 Controle de Ferramentaria e Materiais')
+    ui3d.titulo('Controle de Ferramentaria e Materiais','ferramentaria')
     st.caption(f'Filial: **{filial}** · Estoque e histórico isolados para esta unidade')
-    tab_tools, tab_mats, tab_conf = st.tabs(['🛠️ Ferramentas', '📦 Materiais', '🖨️ Conferência Física'])
+    tab_tools, tab_mats, tab_conf = st.tabs([ui3d.aba('Ferramentas','ferramentaria'), ui3d.aba('Materiais','compras'), ui3d.aba('Conferência Física','imprimir_os')])
     for tab, tipo in ((tab_tools, 'FERRAMENTA'), (tab_mats, 'MATERIAL')):
         with tab:
             _painel_tipo(filial, usuario, administrador, tipo)
@@ -25,7 +38,7 @@ def _painel_tipo(filial, usuario, administrador, tipo):
     k1.metric('Itens cadastrados',len(ativos))
     k2.metric('Quantidade em estoque',f'{sum(float(r["estoque"]) for r in ativos):,.1f}')
     k3.metric('No estoque mínimo ou abaixo',len(deficit))
-    aba1,aba2,aba3,aba4,aba5 = st.tabs(['📋 Estoque','➕ Cadastro','🔄 Movimentações','🕘 Histórico','🗑️ Excluir / Reativar'])
+    aba1,aba2,aba3,aba4,aba5 = st.tabs([ui3d.aba('Estoque','ferramentaria'),ui3d.aba('Cadastro','nova_os'),ui3d.aba('Movimentações','gerenciar_os'),ui3d.aba('Histórico','dashboard'),ui3d.aba('Excluir / Reativar','ferramentaria')])
     with aba1:
         busca = st.text_input('Pesquisar código ou descrição',key=f'busca_{tipo}',placeholder='Nome, código, patrimônio ou localização')
         mostrar_inativos = st.checkbox('Mostrar itens excluídos / desativados', value=False, key=f'mostrar_inativos_{tipo}')
@@ -123,7 +136,7 @@ def _painel_tipo(filial, usuario, administrador, tipo):
                 else:st.success('Sem empréstimos pendentes entre as movimentações consultadas.')
 
     with aba5:
-        st.subheader('🗑️ Excluir itens do cadastro')
+        ui3d.titulo('Excluir itens do cadastro','ferramentaria',nivel=2)
         st.caption('A exclusão retira o item do estoque ativo. Registros que tiveram movimentações permanecem no histórico para auditoria.')
         if not administrador:
             st.info('Somente administradores podem excluir ou reativar itens cadastrados.')
@@ -166,7 +179,7 @@ def _painel_tipo(filial, usuario, administrador, tipo):
 
 def _painel_conferencia(filial, usuario):
     """Folha para contagem manual: consulta o banco, nunca registra ajuste de saldo."""
-    st.subheader('🖨️ Formulário de conferência física do estoque')
+    ui3d.titulo('Formulário de conferência física do estoque','imprimir_os',nivel=2)
     st.caption('Emita uma relação dos itens da filial com saldo no sistema e espaços para preencher a quantidade encontrada. '
                'Nenhum estoque é modificado pela emissão do PDF.')
     col1, col2, col3 = st.columns([2, 1, 1])
