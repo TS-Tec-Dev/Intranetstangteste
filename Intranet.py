@@ -1154,7 +1154,16 @@ with st.sidebar:
     tema_stang.controle_tema()
     st.markdown("---")
     if menus_disponiveis:
-        menu = st.radio("Navegação Principal", menus_disponiveis)
+        # Ícones 3D apenas visuais: as opções originais são preservadas para
+        # permissões, comparações de menu, backups e navegação.
+        try:
+            import menu_icones_3d
+            menu_icones_3d.aplicar_estilo(menus_disponiveis)
+            _rotulo_menu = menu_icones_3d.rotulo_menu
+        except (ImportError, OSError, ValueError) as _erro_icone:
+            # Falha segura: sem o módulo visual, permanecem os emojis originais.
+            _rotulo_menu = str
+        menu = st.radio("Navegação Principal", menus_disponiveis, format_func=_rotulo_menu)
     else:
         st.warning("⚠️ Você não possui permissão para acessar nenhum menu.")
         menu = None

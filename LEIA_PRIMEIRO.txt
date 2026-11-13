@@ -1,30 +1,28 @@
-INTRANET STANG - ASSUNTO E MENSAGEM DO E-MAIL EDITÁVEIS
+INTRANET STANG — ÍCONES 3D DO MENU (v2.0.5.5)
+================================================
 
-No Painel de Assinaturas, o assunto do e-mail deixa de ser fixo. O campo
-"Assunto do E-mail" começa vazio e você escolhe qualquer texto de uma linha.
-O campo "Mensagem do E-mail" também começa vazio (opcional).
-O número do pedido continua sendo usado para localizar anexos e marcar status.
+OBJETIVO
+Trocar apenas os EMOJIS VISÍVEIS dos 10 itens da barra lateral por ícones 3D em WebP otimizados, mantendo intactos os identificadores internos dos menus, as permissões dos usuários e os temas claro/escuro.
 
-ATENÇÃO: PRESERVE SEU CÓDIGO ATUAL
-A versão em "Intranet.py" é baseada na v2.0.5.3 conhecida aqui.
-Se você tiver atualizado qualquer outra coisa, NÃO substitua o arquivo inteiro.
+INSTALAÇÃO NO GITHUB (REPOSITÓRIO Intranetstangteste)
+1. Faça uma cópia do seu Intranet.py atual.
+2. Abra o arquivo ZIP e extraia os dois arquivos PYTHON da raiz:
+   - Intranet.py
+   - menu_icones_3d.py
+3. No GitHub, branch main > Add file > Upload files, envie esses DOIS arquivos à raiz.
+4. Confirme a substituição em Commit changes.
+5. Aguarde/reinicie o Streamlit, atualize o navegador e confira as 10 opções do menu.
 
-MÉTODO RECOMENDADO (não perde outras modificações):
-1. Baixe o Intranet.py ATUAL no GitHub e coloque-o em uma pasta do PC.
-2. Coloque "aplicar_patch_seguro.py" na mesma pasta.
-3. No terminal dessa pasta, execute: python aplicar_patch_seguro.py
-4. O script salvará Intranet.py.antes_assunto.bak como cópia de segurança.
-5. Envie o Intranet.py atualizado para a raiz do repositório no GitHub.
-6. Faça o commit e reinicie a aplicação no Streamlit.
+A PASTA icones_3d/ NO ZIP É OPCIONAL; contém fontes PNG e WebP para edição futura.
+Não é preciso fazer upload dessa pasta — os ícones já estão embutidos no menu_icones_3d.py.
 
-O script verifica se os trechos esperados existem e não altera o arquivo se
-estiverem ausentes ou incompatíveis; não mexe em banco, senha, conta ou PDF.
+SEGURANÇA / COMPATIBILIDADE
+- O código foi preparado a partir do Intranet.py da branch main (blob SHA 59ce463aa16304dbacb17be760ef5398eae4542c) do repositório de teste.
+- Se o Intranet.py mudou DEPOIS dessa versão, NÃO substitua por esta cópia integral: aplique o patch APENAS_MENU_3D.patch ou compare as diferenças.
+- Se menu_icones_3d.py estiver ausente, a Intranet exibe os emojis anteriores em vez de travar.
+- Não é necessário mudar DATABASE_URL, Supabase, secrets, usuários, assinaturas ou backups.
+- A renderização usa data-URI WebP pequena, sem solicitações extras ao servidor.
+- A aparência depende do DOM do Streamlit. Se uma atualização maior do Streamlit modificar a marcação do st.radio, os nomes dos menus continuarão funcionando; o CSS poderá precisar de ajuste.
 
-MÉTODO SIMPLES (somente se o seu arquivo atual é a mesma v2.0.5.3):
-- Envie o Intranet.py deste ZIP ao GitHub substituindo o arquivo existente.
-
-TESTE:
-Selecione o pedido 553 -> Escreva seu próprio assunto e mensagem ->
-Envie para um endereço de teste -> confira o título do e-mail recebido.
-
-Nenhum CSV, senha, segredo ou arquivo de clientes está incluído neste pacote.
+ROLLBACK
+Reponha o Intranet.py anterior e, se desejar, apague menu_icones_3d.py.
