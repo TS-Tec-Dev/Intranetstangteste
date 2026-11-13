@@ -18,7 +18,7 @@ PALETAS = {
     "Escuro": {
         "cor": "#eef5ff", "secundario": "#b9cbe2", "muted": "#8fa9c8",
         "accent": "#2992ec", "hover": "#1975c7", "focus": "rgba(41,146,236,.27)",
-        "surface": "rgba(13,30,57,.91)", "surface_soft": "rgba(21,42,74,.89)",
+        "surface": "rgba(13,30,57,.83)", "surface_soft": "rgba(21,42,74,.79)",
         "side": "#141e31", "input": "#152944", "input_text": "#f3f7ff",
         "border": "rgba(159,191,227,.20)", "border_hover": "rgba(104,178,245,.52)",
         "shadow": "0 12px 38px rgba(0,5,21,.28)",
@@ -26,13 +26,13 @@ PALETAS = {
         "badge": "rgba(30,146,229,.16)", "metric": "#77d9c0",
         "grid": "rgba(184,207,233,.10)",
         "page_fallback": "#06182e",
-        "image_tint": "linear-gradient(120deg,rgba(1,24,58,.91),rgba(2,15,37,.93))",
+        "image_tint": "linear-gradient(120deg,rgba(1,24,58,.70),rgba(2,15,37,.68))",
         "button_text": "#ffffff", "row_hover": "rgba(52,104,160,.22)",
     },
     "Claro": {
         "cor": "#12243d", "secundario": "#475e78", "muted": "#687c96",
         "accent": "#096fd5", "hover": "#095aad", "focus": "rgba(9,111,213,.16)",
-        "surface": "rgba(255,255,255,.97)", "surface_soft": "#f4f8fd",
+        "surface": "rgba(255,255,255,.90)", "surface_soft": "rgba(244,248,253,.91)",
         "side": "#ffffff", "input": "#ffffff", "input_text": "#10243c",
         "border": "rgba(25,64,111,.13)", "border_hover": "rgba(9,111,213,.46)",
         "shadow": "0 10px 28px rgba(25,57,98,.08)",
@@ -40,7 +40,7 @@ PALETAS = {
         "badge": "#e3f0ff", "metric": "#0973b6",
         "grid": "rgba(31,71,118,.12)",
         "page_fallback": "#f3f7fc",
-        "image_tint": "linear-gradient(120deg,rgba(247,250,255,.97),rgba(242,247,253,.96))",
+        "image_tint": "linear-gradient(120deg,rgba(247,250,255,.78),rgba(242,247,253,.82))",
         "button_text": "#ffffff", "row_hover": "#eef6ff",
     },
 }
@@ -86,38 +86,95 @@ def inicializar_tema() -> None:
     st.session_state["_stang_ultimo_tema_valido"] = recuperado
 
 
-def _atualizar_url_tema() -> None:
-    # Callback executado ANTES do próximo render do Streamlit.
-    # Corrigir também a desmarcação do widget antes da atualização de URL.
+# Identificador mostrado na interface para validar a implantação no Streamlit Cloud.
+REVISAO_TEMA = "2026-11-13-sidebar-v2057"
+
+
+def _cores_atuais() -> dict:
+    """Retorna sempre uma paleta válida, mesmo com estado antigo/corrompido."""
     inicializar_tema()
+    atual = st.session_state.get("tema_stang")
+    # Não indexar diretamente por valores vindos da interface.
+    if not _tema_valido(atual):
+        atual = "Escuro"
+        st.session_state["tema_stang"] = atual
+        st.session_state["_stang_ultimo_tema_valido"] = atual
+    return PALETAS[atual]
+
+
+def _atualizar_url_tema() -> None:
+    """Sincroniza preferência (independente da chave do widget)."""
+    selecionado = st.session_state.get("tema_stang_radio_v3")
+    if _tema_valido(selecionado):
+        st.session_state["tema_stang"] = selecionado
+        st.session_state["_stang_ultimo_tema_valido"] = selecionado
+    else:
+        inicializar_tema()
     try:
-        st.query_params["tema"] = "claro" if st.session_state["tema_stang"] == "Claro" else "escuro"
+        st.query_params["tema"] = (
+            "claro" if st.session_state.get("tema_stang") == "Claro" else "escuro"
+        )
     except Exception:
-        # O tema continua funcionando mesmo se a URL estiver indisponível.
+        pass
+
+
+def _alterar_tema_por_selecao() -> None:
+    """Atualiza a paleta só com valores válidos; evita KeyError ao alternar."""
+    escolhido = st.session_state.get("tema_stang_seletor_v4")
+    if _tema_valido(escolhido):
+        st.session_state["tema_stang"] = escolhido
+        st.session_state["_stang_ultimo_tema_valido"] = escolhido
+    else:
+        inicializar_tema()
+    try:
+        st.query_params["tema"] = (
+            "claro" if st.session_state.get("tema_stang") == "Claro" else "escuro"
+        )
+    except Exception:
         pass
 
 
 def controle_tema() -> None:
-    """Exibir no sidebar, depois do login. Não altera o tema global da conta."""
+    """Seletor suspenso compacto para a barra lateral."""
     inicializar_tema()
-    st.markdown('<div class="stang-appearance-label">🎨 Aparência</div>', unsafe_allow_html=True)
-    st.segmented_control(
+    atual = st.session_state["tema_stang"]
+    # O estado do widget deve ser atualizado antes de sua criação, não depois.
+    if st.session_state.get("tema_stang_seletor_v4") != atual:
+        st.session_state["tema_stang_seletor_v4"] = atual
+    st.markdown(
+        '<div class="stang-appearance-heading"><span>◐</span>'
+        '<strong>Aparência</strong></div>',
+        unsafe_allow_html=True,
+    )
+    st.selectbox(
         "Tema da Intranet",
         options=TEMAS,
-        format_func=lambda valor: "🌙 Escuro" if valor == "Escuro" else "☀️ Claro",
-        key="tema_stang",
-        on_change=_atualizar_url_tema,
+        index=TEMAS.index(atual),
+        format_func=lambda valor: (
+            "🌙  Modo escuro — Azul petróleo" if valor == "Escuro"
+            else "☀️  Modo claro — Branco gelo"
+        ),
+        key="tema_stang_seletor_v4",
+        on_change=_alterar_tema_por_selecao,
         label_visibility="collapsed",
+    )
+    st.markdown(
+        '<div class="stang-theme-hint">Foto da base em destaque · tema salvo nesta sessão</div>',
+        unsafe_allow_html=True,
     )
 
 
 def aplicar_tema(caminho_capa: str = "capa.png") -> None:
-    inicializar_tema()
-    cores = PALETAS[st.session_state["tema_stang"]]
-    imagem = _imagem_base64(caminho_capa)
+    cores = _cores_atuais()
+    # Evita enviar aproximadamente 1 MB do PNG da capa em cada rerun.
+    # O WebP otimizado é apenas visual; se não estiver disponível, usa a capa antiga.
+    otimizada = str(Path(caminho_capa).with_name("capa_otimizada.webp"))
+    caminho_imagem = otimizada if Path(otimizada).is_file() else caminho_capa
+    imagem = _imagem_base64(caminho_imagem)
+    tipo_imagem = "image/webp" if caminho_imagem.lower().endswith(".webp") else "image/png"
     fundo = cores["image_tint"]
     if imagem:
-        fundo += f', url("data:image/png;base64,{imagem}")'
+        fundo += f', url("data:{tipo_imagem};base64,{imagem}")'
 
     # CSS exclusivamente visual; não interfere nos seletores, formulários ou dados.
     css = r"""
@@ -166,6 +223,65 @@ def aplicar_tema(caminho_capa: str = "capa.png") -> None:
     [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.55rem; }
     [data-testid="stSidebar"] .stMarkdown p { color: var(--stang-secondary); }
     [data-testid="stSidebar"] hr { margin: 0.5rem 0; }
+    /* Painel de identidade com três pictogramas 3D; escopo limitado à sidebar. */
+    .stang-id-card {
+      background: var(--stang-surface);
+      border: 1px solid var(--stang-border);
+      border-radius: 15px;
+      padding: 3px 10px;
+      margin: .35rem 0 .65rem;
+      box-shadow: 0 7px 22px rgba(0,10,30,.11);
+    }
+    .stang-id-row {
+      display: flex; align-items: center; gap: 10px; min-height: 51px;
+    }
+    .stang-id-row + .stang-id-row {
+      border-top: 1px solid var(--stang-border);
+    }
+    .stang-id-icon {
+      width: 38px; height: 38px; flex: 0 0 38px;
+      object-fit: contain; vertical-align: middle;
+    }
+    .stang-id-label {
+      display: block; font-size: .72rem; font-weight: 600;
+      color: var(--stang-muted); line-height: 1.25;
+    }
+    .stang-id-value {
+      display: block; font-size: .90rem;
+      font-weight: 720; line-height: 1.4;
+      color: var(--stang-text);
+      overflow-wrap: anywhere;
+    }
+    .stang-filial-label, .stang-appearance-heading {
+      display: flex; align-items: center; gap: 8px;
+      margin: .4rem 0 .3rem;
+      color: var(--stang-text);
+      font-size: .82rem; letter-spacing: .005em;
+    }
+    .stang-filial-label .stang-id-icon {
+      width: 30px; height: 30px; flex-basis: 30px;
+    }
+    .stang-appearance-heading span {
+      display: inline-flex; align-items:center; justify-content:center;
+      height: 27px; width: 27px; border-radius: 10px;
+      background: linear-gradient(145deg,#229fea,#074384);
+      color: white; border: 1px solid rgba(160,220,255,.45);
+    }
+    .stang-theme-hint {
+      font-size: .69rem; line-height: 1.35;
+      color: var(--stang-muted); margin: .25rem 0 .6rem;
+    }
+    /* Moderniza ambos os selectboxes (filial e aparência), sem afetar menus. */
+    [data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+      background: var(--stang-input) !important;
+      border: 1px solid var(--stang-border-hover) !important;
+      border-radius: 12px !important;
+      min-height: 40px;
+      box-shadow: 0 3px 12px rgba(0,0,0,.07);
+    }
+    [data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div:hover {
+      border-color: var(--stang-accent) !important;
+    }
     .stang-appearance-label {
       font-size: .78rem;
       letter-spacing: .03em;
@@ -389,8 +505,7 @@ def aplicar_tema(caminho_capa: str = "capa.png") -> None:
 
 def estilizar_grafico(fig):
     """Somente aparência Plotly, sem alterar filtros, dados ou cálculos."""
-    inicializar_tema()
-    cor = PALETAS[st.session_state["tema_stang"]]
+    cor = _cores_atuais()
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",

@@ -1,37 +1,35 @@
-INTRANET STANG — ÍCONES 3D EM TODAS AS ÁREAS — v2.0.5.6
+INTRANET STANG — v2.0.5.7
+Ajuste visual da barra lateral e transparência da foto da base
+13/11/2026
 
-CORREÇÃO
-A versão 2.0.5.5 ocultava os emojis do st.radio, mas os ícones dependiam
-exclusivamente de CSS seletor frágil. Nesta versão as imagens são colocadas
-nos rótulos nativos Markdown do Streamlit (st.radio e st.tabs). Os títulos
-são renderizados com HTML simples <img> e imagens embutidas.
+CONTEÚDO PARA O GITHUB:
+1) Intranet.py — substituir o existente na RAIZ
+2) tema_stang.py — substituir o existente na RAIZ
 
-ARQUIVOS A ENVIAR À RAIZ DO GITHUB (branch main do repositório de teste):
-- Intranet.py
-- menu_icones_3d.py
-- mod_rh.py
-- mod_ferramentaria.py
-- mod_fm_biblioteca.py
-- mod_filiais_backup.py
+INSTALAÇÃO
+1. Salve uma cópia do Intranet.py e do tema_stang.py atuais do GitHub.
+2. No repositório TS-Tec-Dev/Intranetstangteste (branch main), selecione Add file > Upload files.
+3. Envie APENAS Intranet.py e tema_stang.py deste pacote. Não envie LEIA_PRIMEIRO.txt, caso não queira.
+4. Confirme Commit changes; depois recarregue o Streamlit (Ctrl+Shift+R).
+5. Confira a barra lateral: cartão Logado como/Perfil, Filial, Aparência e os demais menus.
 
-Todos os arquivos foram obtidos da versão atual do repositório de teste.
-NÃO envie a pasta __pycache__, PDFs, bancos CSV, credenciais ou arquivos .bak.
+MUDANÇAS
+- Retira o expansível 'Diagnóstico de carregamento' no rodapé da sidebar.
+- Retira a expressão '— Backup unificado' do texto de versão. A FUNÇÃO DE BACKUP CONTINUA EXISTINDO E INALTERADA.
+- Cartão de identidade com três ícones novos em PNG base64 (usuário, perfil e filial), integrados ao Intranet.py sem arquivos adicionais.
+- Troca os botões do tema por um seletor suspenso 'Modo escuro' / 'Modo claro'.
+- Trata alterações repetidas de tema, inclusive seleção inesperada, sem KeyError.
+- Permite enxergar melhor a foto da base, reduzindo a opacidade do gradiente nos dois temas.
+- Mantém comportamento de filiais/autorização, RH, pedidos, O.S., anexos e demais módulos.
 
-ORDEM RECOMENDADA
-1. Gere backup pelo sistema e reserve uma cópia do código atual.
-2. No repositório Intranetstangteste, use Add file > Upload files.
-3. Envie os 6 arquivos e confira os nomes; confirme Commit changes.
-4. Reboot app pelo Streamlit Cloud, atualize com Ctrl+Shift+R.
-5. Verifique MENU LATERAL e cabeçalhos/abas de O.S., Compras, Formulários,
-   Dashboard, Assinaturas, Ferramentaria, RH, Filiais/Backup.
+NÃO É NECESSÁRIO
+- Modificar DATABASE_URL/Secrets ou Supabase.
+- Refazer usuários/senhas, migrar dados ou carregar bancos CSV.
+- Reinstalar os demais módulos ou recriar ícones 3D de menu.
 
-SEGURANÇA/COMPATIBILIDADE
-A seleção do st.radio e os identificadores de permissão ficam idênticos.
-Não há mudança de SQL/Supabase, senhas, contas, backup, anexos, cálculos, etc.
-As imagens WebP de 88x88 estão embutidas em menu_icones_3d.py.
-Se faltar o módulo de ícones, o código mantém títulos e opções visíveis.
-
-NOTA
-O funcionamento com o navegador e a versão de Streamlit no Cloud ainda
-precisa de validação. Se uma imagem Markdown for bloqueada, os textos
-continuam funcionando; envie a captura para análise do renderer.
+NOTAS
+- Alteração preparada sobre Intranet.py da branch main em 13/11/2026 (idêntico à v2.0.5.6 do pacote anterior).
+- Se o arquivo no GitHub for alterado depois desta preparação, compare as diferenças antes de substituir.
+- O tema usa capa_otimizada.webp se disponível, senão capa.png.
+- Testes locais: sintaxe, integridade dos três PNGs, alternância tema escuro/claro/repetição e preservação dos principais blocos de navegação. Ainda não validado no Streamlit Cloud.
+- Se o navegador exibir cores antigas, recarregue com Ctrl+Shift+R.
