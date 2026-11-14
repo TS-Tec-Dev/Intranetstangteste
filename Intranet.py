@@ -1158,10 +1158,20 @@ if user_logado_row.empty:
     st.error("Usuário não localizado no cadastro atual. Entre novamente.")
     st.stop()
 
-if pd.notna(user_logado_row.iloc[0].get("Permissoes")) and str(user_logado_row.iloc[0]["Permissoes"]) != "":
-    menus_disponiveis = [m.strip() for m in str(user_logado_row.iloc[0]["Permissoes"]).split(",") if m.strip() in TODOS_MENUS]
+# Permissoes reais do cadastro prevalecem sobre o perfil Admin.
+# Modulos sensiveis exigem marcacao EXPLICITA, inclusive para administradores.
+MENUS_SENSIVEIS = {"🧰 Ferramentaria", "👥 Gestão de RH", "🏢 Filiais e Backup"}
+permissoes_brutas = user_logado_row.iloc[0].get("Permissoes", "")
+if pd.notna(permissoes_brutas) and str(permissoes_brutas).strip() not in ("", "None", "nan"):
+    permissoes_explicitas = {
+        m.strip() for m in str(permissoes_brutas).split(",") if m.strip() in TODOS_MENUS
+    }
+    menus_disponiveis = [m for m in TODOS_MENUS if m in permissoes_explicitas]
 else:
-    menus_disponiveis = TODOS_MENUS
+    # Compatibilidade com contas antigas sem configuracao de permissoes:
+    # preservar menus comuns, mas NUNCA conceder os modulos sensiveis.
+    permissoes_explicitas = set()
+    menus_disponiveis = [m for m in TODOS_MENUS if m not in MENUS_SENSIVEIS]
 
 if is_user_admin and "✍️ Painel de Assinaturas" not in menus_disponiveis:
     menus_disponiveis.append("✍️ Painel de Assinaturas")
@@ -1178,9 +1188,8 @@ if st.session_state.get("filial_ativa") not in filiais_autorizadas:
     st.session_state.filial_ativa = filiais_autorizadas[0]
 if not is_user_admin:
     menus_disponiveis = [m for m in menus_disponiveis if m not in ("🏢 Filiais e Backup", "👥 Gestão de RH")]
-if is_user_admin:
-    for m in ("🧰 Ferramentaria", "👥 Gestão de RH", "🏢 Filiais e Backup"):
-        if m not in menus_disponiveis:menus_disponiveis.append(m)
+# Nao adicionar RH/Ferramentaria/Backup automaticamente pelo perfil Admin.
+# Cada item depende da selecao salva em Configuracoes -> Permissoes de Acesso.
 
 # --- BARRA LATERAL (MENU) ---
 # Ícones do cartão de acesso embutidos para funcionar sem arquivos adicionais.
@@ -1259,11 +1268,17 @@ with st.sidebar:
         st.session_state.pop("pre_restore_total_v205", None)
         st.rerun()
     st.info(f"🏢 {nomes_filiais[st.session_state.filial_ativa]}\nStatus: Conectado 🟢")
-    st.caption("Versão 2.0.5.7")
+    st.caption("Versão 2.0.6.2")
     
     st.markdown("<div style='text-align: left; font-style: italic; font-size: 11px; opacity: 0.7; margin-top: 25px;'><i>By: TS tech</i></div>", unsafe_allow_html=True)
 
 if menu is not None:
+    if menu not in menus_disponiveis:
+        st.error("Acesso não autorizado a este módulo.")
+        st.stop()
+    if menu in MENUS_SENSIVEIS and menu not in permissoes_explicitas:
+        st.error("Este módulo não está habilitado nas permissões do seu usuário.")
+        st.stop()
     # Os anexos permanecem no Supabase, mas só são recuperados ao serem usados.
     # A sincronização de TODOS os arquivos em cada interação deixava a aplicação lenta.
     if menu == "🧰 Ferramentaria":
@@ -2500,119 +2515,121 @@ if menu is not None:
                     f"* **Itens:** {itens_do_pedido_str}\n"
                     f"* **Observações:** {obs_pedido}")
 
-            st.markdown("---")
+            # Anexar NF/Boleto e enviar e-mail: somente perfil administrador.
+            if is_user_admin:
+                st.markdown("---")
 
-            col_upload, col_acoes = st.columns(2)
+                col_upload, col_acoes = st.columns(2)
 
-            with col_upload:
-                with st.form("form_up_nf_bol"):
-                    st.markdown("**Upload de Nota Fiscal e Boleto**")
-                    up_nf = st.file_uploader("Upload da Nota Fiscal (NF)", type=["pdf", "png", "jpg", "jpeg"])
-                    up_bol = st.file_uploader("Upload do Boleto", type=["pdf", "png", "jpg", "jpeg"])
+                with col_upload:
+                    with st.form("form_up_nf_bol"):
+                        st.markdown("**Upload de Nota Fiscal e Boleto**")
+                        up_nf = st.file_uploader("Upload da Nota Fiscal (NF)", type=["pdf", "png", "jpg", "jpeg"])
+                        up_bol = st.file_uploader("Upload do Boleto", type=["pdf", "png", "jpg", "jpeg"])
 
-                    if st.form_submit_button("Salvar Documentos"):
-                        salvou_algo = False
-                        if up_nf is not None:
-                            nf_name = f"nf_{id_sel_ass}_{up_nf.name}"
-                            nf_path = repositorio.caminho_documento(nf_name)
-                            with open(nf_path, "wb") as f:
-                                f.write(up_nf.getbuffer())
-                            repositorio.registrar_documento(nf_path)
-                            df_ass.loc[df_ass["ID_Compra"] == str(id_sel_ass), "NF_Anexada"] = nf_path
-                            salvou_algo = True
+                        if st.form_submit_button("Salvar Documentos"):
+                            salvou_algo = False
+                            if up_nf is not None:
+                                nf_name = f"nf_{id_sel_ass}_{up_nf.name}"
+                                nf_path = repositorio.caminho_documento(nf_name)
+                                with open(nf_path, "wb") as f:
+                                    f.write(up_nf.getbuffer())
+                                repositorio.registrar_documento(nf_path)
+                                df_ass.loc[df_ass["ID_Compra"] == str(id_sel_ass), "NF_Anexada"] = nf_path
+                                salvou_algo = True
 
-                        if up_bol is not None:
-                            bol_name = f"boleto_{id_sel_ass}_{up_bol.name}"
-                            bol_path = repositorio.caminho_documento(bol_name)
-                            with open(bol_path, "wb") as f:
-                                f.write(up_bol.getbuffer())
-                            repositorio.registrar_documento(bol_path)
-                            df_ass.loc[df_ass["ID_Compra"] == str(id_sel_ass), "Boleto_Anexado"] = bol_path
-                            salvou_algo = True
+                            if up_bol is not None:
+                                bol_name = f"boleto_{id_sel_ass}_{up_bol.name}"
+                                bol_path = repositorio.caminho_documento(bol_name)
+                                with open(bol_path, "wb") as f:
+                                    f.write(up_bol.getbuffer())
+                                repositorio.registrar_documento(bol_path)
+                                df_ass.loc[df_ass["ID_Compra"] == str(id_sel_ass), "Boleto_Anexado"] = bol_path
+                                salvou_algo = True
 
-                        if salvou_algo:
-                            repositorio.salvar_csv(df_ass, ARQUIVO_COMPRAS)
-                            st.success("Documentos salvos com sucesso!")
-                            st.rerun()
-                        else:
-                            st.warning("Selecione ao menos um arquivo para salvar.")
-
-            with col_acoes:
-                if not tem_assinatura_png:
-                    st.warning("⚠️ Seu usuário não possui uma assinatura em PNG cadastrada na tela de Login.")
-
-                with st.form("form_enviar_email_docs"):
-                    st.markdown("**📧 Enviar Documentos por E-mail:**")
-                    dest_email = st.text_input("E-mail do Destinatário", value="financeiro@stang.com.br")
-                    assunto_email = st.text_input(
-                        "Assunto do E-mail *",
-                        value="",
-                        placeholder="Digite o assunto que deve aparecer ao destinatário",
-                        key=f"assunto_email_pedido_{id_sel_ass}",
-                    )
-                    mensagem_email = st.text_area(
-                        "Mensagem do E-mail",
-                        value="",
-                        height=100,
-                        placeholder="Escreva livremente a mensagem (opcional)",
-                        key=f"mensagem_email_pedido_{id_sel_ass}",
-                    )
-
-                    btn_enviar_e = st.form_submit_button("🚀 Enviar E-mail com Anexos", use_container_width=True)
-
-                    if btn_enviar_e:
-                        if not dest_email.strip():
-                            st.error("Informe o e-mail do destinatário.")
-                        elif not assunto_email.strip():
-                            st.error("Informe o assunto do e-mail antes de enviar.")
-                        elif "\r" in assunto_email or "\n" in assunto_email:
-                            st.error("O assunto do e-mail deve ocupar apenas uma linha.")
-                        else:
-                            df_u_l = repositorio.ler_csv(ARQUIVO_USERS, dtype=str)
-                            row_u_l = df_u_l[df_u_l["Usuario"].str.lower() == st.session_state.usuario.lower()]
-
-                            if row_u_l.empty:
-                                st.error("Dados de usuário não encontrados para envio.")
+                            if salvou_algo:
+                                repositorio.salvar_csv(df_ass, ARQUIVO_COMPRAS)
+                                st.success("Documentos salvos com sucesso!")
+                                st.rerun()
                             else:
-                                u_row_dict = row_u_l.iloc[0].to_dict()
-                                cfg_e_dict = {
-                                    "Email_Remetente": u_row_dict.get("Email_Usuario", ""),
-                                    "Senha_App": u_row_dict.get("Senha_App_Email", ""),
-                                    "Servidor_SMTP": u_row_dict.get("Servidor_SMTP", "smtp.gmail.com"),
-                                    "Porta_SMTP": u_row_dict.get("Porta_SMTP", "587"),
-                                    "Nome_Remetente": st.session_state.usuario
-                                }
+                                st.warning("Selecione ao menos um arquivo para salvar.")
 
-                                anexos_envio = [
-                                    str(row_base_ass.get("Orcamento_Assinado", "None")),
-                                    str(row_base_ass.get("NF_Anexada", "None")),
-                                    str(row_base_ass.get("Boleto_Anexado", "None"))
-                                ]
+                with col_acoes:
+                    if not tem_assinatura_png:
+                        st.warning("⚠️ Seu usuário não possui uma assinatura em PNG cadastrada na tela de Login.")
 
-                                anexos_referenciados = [a for a in anexos_envio if a and a.strip().lower() not in ("none", "nan")]
-                                anexos_faltantes = [a for a in anexos_referenciados if not documento_disponivel(a)]
-                                if anexos_faltantes:
-                                    st.error("Um ou mais documentos vinculados não puderam ser recuperados. O e-mail NÃO foi enviado.")
-                                    st.stop()
-                                if not anexos_referenciados:
-                                    st.error("Não há documentos anexados a este pedido. O e-mail NÃO foi enviado.")
-                                    st.stop()
+                    with st.form("form_enviar_email_docs"):
+                        st.markdown("**📧 Enviar Documentos por E-mail:**")
+                        dest_email = st.text_input("E-mail do Destinatário", value="financeiro@stang.com.br")
+                        assunto_email = st.text_input(
+                            "Assunto do E-mail *",
+                            value="",
+                            placeholder="Digite o assunto que deve aparecer ao destinatário",
+                            key=f"assunto_email_pedido_{id_sel_ass}",
+                        )
+                        mensagem_email = st.text_area(
+                            "Mensagem do E-mail",
+                            value="",
+                            height=100,
+                            placeholder="Escreva livremente a mensagem (opcional)",
+                            key=f"mensagem_email_pedido_{id_sel_ass}",
+                        )
 
-                                sucesso_e, msg_e = enviar_email_real(
-                                    destinatario=dest_email.strip(),
-                                    assunto=assunto_email.strip(),
-                                    corpo=mensagem_email,
-                                    anexos=anexos_envio,
-                                    config=cfg_e_dict
-                                )
+                        btn_enviar_e = st.form_submit_button("🚀 Enviar E-mail com Anexos", use_container_width=True)
 
-                                if sucesso_e:
-                                    df_ass.loc[df_ass["ID_Compra"] == str(id_sel_ass), "Email_Enviado"] = f"Sim | {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-                                    repositorio.salvar_csv(df_ass, ARQUIVO_COMPRAS)
-                                    st.success(f"E-mail enviado com sucesso para {dest_email}!")
-                                    st.rerun()
+                        if btn_enviar_e:
+                            if not dest_email.strip():
+                                st.error("Informe o e-mail do destinatário.")
+                            elif not assunto_email.strip():
+                                st.error("Informe o assunto do e-mail antes de enviar.")
+                            elif "\r" in assunto_email or "\n" in assunto_email:
+                                st.error("O assunto do e-mail deve ocupar apenas uma linha.")
+                            else:
+                                df_u_l = repositorio.ler_csv(ARQUIVO_USERS, dtype=str)
+                                row_u_l = df_u_l[df_u_l["Usuario"].str.lower() == st.session_state.usuario.lower()]
+
+                                if row_u_l.empty:
+                                    st.error("Dados de usuário não encontrados para envio.")
                                 else:
-                                    st.error(f"Erro no envio: {msg_e}")
+                                    u_row_dict = row_u_l.iloc[0].to_dict()
+                                    cfg_e_dict = {
+                                        "Email_Remetente": u_row_dict.get("Email_Usuario", ""),
+                                        "Senha_App": u_row_dict.get("Senha_App_Email", ""),
+                                        "Servidor_SMTP": u_row_dict.get("Servidor_SMTP", "smtp.gmail.com"),
+                                        "Porta_SMTP": u_row_dict.get("Porta_SMTP", "587"),
+                                        "Nome_Remetente": st.session_state.usuario
+                                    }
+
+                                    anexos_envio = [
+                                        str(row_base_ass.get("Orcamento_Assinado", "None")),
+                                        str(row_base_ass.get("NF_Anexada", "None")),
+                                        str(row_base_ass.get("Boleto_Anexado", "None"))
+                                    ]
+
+                                    anexos_referenciados = [a for a in anexos_envio if a and a.strip().lower() not in ("none", "nan")]
+                                    anexos_faltantes = [a for a in anexos_referenciados if not documento_disponivel(a)]
+                                    if anexos_faltantes:
+                                        st.error("Um ou mais documentos vinculados não puderam ser recuperados. O e-mail NÃO foi enviado.")
+                                        st.stop()
+                                    if not anexos_referenciados:
+                                        st.error("Não há documentos anexados a este pedido. O e-mail NÃO foi enviado.")
+                                        st.stop()
+
+                                    sucesso_e, msg_e = enviar_email_real(
+                                        destinatario=dest_email.strip(),
+                                        assunto=assunto_email.strip(),
+                                        corpo=mensagem_email,
+                                        anexos=anexos_envio,
+                                        config=cfg_e_dict
+                                    )
+
+                                    if sucesso_e:
+                                        df_ass.loc[df_ass["ID_Compra"] == str(id_sel_ass), "Email_Enviado"] = f"Sim | {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+                                        repositorio.salvar_csv(df_ass, ARQUIVO_COMPRAS)
+                                        st.success(f"E-mail enviado com sucesso para {dest_email}!")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"Erro no envio: {msg_e}")
 
             st.markdown("---")
             st.markdown("#### 📄 Visualização de Documentos Vinculados ao Pedido:")
